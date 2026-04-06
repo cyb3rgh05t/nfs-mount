@@ -7,18 +7,29 @@ import {
   FolderSync,
   Menu,
   X,
+  Shield,
+  Users,
+  BookOpen,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/nfs", label: "NFS Mounts", icon: HardDrive },
+  { to: "/nfs", label: "NFS", icon: HardDrive },
   { to: "/mergerfs", label: "MergerFS", icon: GitMerge },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/vpn", label: "VPN Tunnel", icon: Shield },
+  { to: "/users", label: "Benutzer", icon: Users, adminOnly: true },
+  { to: "/settings", label: "Einstellungen", icon: Settings },
+  { to: "/docs", label: "Dokumentation", icon: BookOpen },
 ];
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, logout } = useAuth();
+
+  const filteredLinks = links.filter((l) => !l.adminOnly || user?.is_admin);
 
   const linkClass = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -40,7 +51,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {links.map(({ to, label, icon: Icon }) => (
+        {filteredLinks.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
@@ -54,8 +65,32 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-3 py-4 border-t border-nfs-border">
+      {/* User & Logout */}
+      <div className="px-3 py-4 border-t border-nfs-border space-y-3">
+        {user && (
+          <div className="flex items-center gap-3 px-4">
+            <div className="w-8 h-8 rounded-full bg-nfs-primary/20 flex items-center justify-center">
+              <span className="text-xs font-bold text-nfs-primary uppercase">
+                {user.display_name?.[0] || user.username[0]}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">
+                {user.display_name || user.username}
+              </p>
+              <p className="text-xs text-nfs-muted">
+                {user.is_admin ? "Admin" : "User"}
+              </p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Abmelden</span>
+        </button>
         <p className="text-xs text-nfs-muted text-center">v1.0.0</p>
       </div>
     </>

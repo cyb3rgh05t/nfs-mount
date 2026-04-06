@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     telegram_topic_id: str = ""
     log_file: str = "/var/log/nfs-manager/nfs-manager.log"
 
+    # JWT Auth
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_hours: int = 24
+    default_admin_user: str = "admin"
+    default_admin_pass: str = "admin"
+
     # Default NFS options optimized for 300+ concurrent streams
     default_nfs_options: str = (
         "vers=4.2,proto=tcp,hard,nconnect=16,"

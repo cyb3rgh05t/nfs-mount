@@ -50,3 +50,45 @@ class NFSMountStatus(BaseModel):
     mounted: bool
     validated: bool
     server_reachable: bool
+
+
+# --- NFS Export (Server) Schemas ---
+
+
+class NFSExportBase(BaseModel):
+    name: str
+    export_path: str
+    allowed_hosts: str = "*"
+    options: str = "rw,sync,no_subtree_check,no_root_squash"
+    nfs_version: str = "4.2"
+    enabled: bool = True
+
+
+class NFSExportCreate(NFSExportBase):
+    pass
+
+
+class NFSExportUpdate(BaseModel):
+    name: str | None = None
+    export_path: str | None = None
+    allowed_hosts: str | None = None
+    options: str | None = None
+    nfs_version: str | None = None
+    enabled: bool | None = None
+
+
+class NFSExportResponse(NFSExportBase):
+    id: int
+    is_active: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class NFSExportStatus(BaseModel):
+    id: int
+    name: str
+    export_path: str
+    is_active: bool

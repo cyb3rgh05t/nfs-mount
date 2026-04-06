@@ -28,7 +28,7 @@ def get_system_stats() -> dict:
     mem = psutil.virtual_memory()
 
     try:
-        load = list(os.getloadavg())
+        load = list(os.getloadavg())  # type: ignore[attr-defined]
     except (AttributeError, OSError):
         # os.getloadavg() not available on Windows
         cpu = psutil.cpu_percent(interval=0.1)

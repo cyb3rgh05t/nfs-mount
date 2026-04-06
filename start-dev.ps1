@@ -63,6 +63,7 @@ if (-not (Test-Path $dataDir)) {
 
 # ── Environment ──
 $env:DATABASE_URL = "sqlite+aiosqlite:///$dataDir/nfs-manager.db"
+$env:JWT_SECRET = "dev-secret-do-not-use-in-production"
 
 Write-Host ""
 Write-Host "[START] Backend  -> http://localhost:8080" -ForegroundColor Green
@@ -74,11 +75,12 @@ Write-Host ""
 
 # ── Starte Backend als Job ──
 $backendJob = Start-Job -ScriptBlock {
-    param($uvicorn, $root, $dbUrl)
+    param($uvicorn, $root, $dbUrl, $jwtSecret)
     $env:DATABASE_URL = $dbUrl
+    $env:JWT_SECRET = $jwtSecret
     Set-Location $root
     & $uvicorn "backend.app.main:app" --host 0.0.0.0 --port 8080 --reload
-} -ArgumentList $venvUvicorn, $ROOT, $env:DATABASE_URL
+} -ArgumentList $venvUvicorn, $ROOT, $env:DATABASE_URL, $env:JWT_SECRET
 
 # ── Starte Frontend als Job ──
 $frontendJob = Start-Job -ScriptBlock {

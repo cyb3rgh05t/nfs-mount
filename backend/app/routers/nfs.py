@@ -7,13 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import verify_api_key
 from ..database import get_db
 from ..models.nfs_mount import NFSMount
+from ..models.nfs_export import NFSExport
 from ..schemas.nfs import (
     NFSMountCreate,
     NFSMountResponse,
     NFSMountStatus,
     NFSMountUpdate,
+    NFSExportCreate,
+    NFSExportResponse,
+    NFSExportStatus,
+    NFSExportUpdate,
 )
 from ..services import nfs_service
+from ..services import nfs_export_service
 from ..services.notification_service import send_alert
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
@@ -136,3 +142,126 @@ async def unmount_all(db: AsyncSession = Depends(get_db)):
         r = await nfs_service.unmount_nfs(m.local_path)
         results.append({"name": m.name, **r})
     return results
+
+
+# ──────────────────────────────────────────
+# NFS Exports (Server)
+# ──────────────────────────────────────────
+
+
+@router.get("/exports", response_model=list[NFSExportResponse])
+async def list_exports(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(NFSExport))
+    return result.scalars().all()
+
+
+@router.post("/exports", response_model=NFSExportResponse, status_code=201)
+async def create_export(data: NFSExportCreate, db: AsyncSession = Depends(get_db)):
+    export = NFSExport(**data.model_dump())
+    db.add(export)
+    await db.commit()
+    await db.refresh(export)
+    return export
+
+
+@router.get("/exports/{export_id}", response_model=NFSExportResponse)
+async def get_export(export_id: int, db: AsyncSession = Depends(get_db)):
+    export = await db.get(NFSExport, export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="NFS export not found")
+    return export
+
+
+@router.put("/exports/{export_id}", response_model=NFSExportResponse)
+async def update_export(
+    export_id: int, data: NFSExportUpdate, db: AsyncSession = Depends(get_db)
+):
+    export = await db.get(NFSExport, export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="NFS export not found")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(export, key, value)
+    await db.commit()
+    await db.refresh(export)
+    return export
+
+
+@router.delete("/exports/{export_id}")
+async def delete_export(export_id: int, db: AsyncSession = Depends(get_db)):
+    export = await db.get(NFSExport, export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="NFS export not found")
+    # Disable export first
+    if export.is_active:
+        await nfs_export_service.disable_export(export, db)
+    await db.delete(export)
+    await db.commit()
+    # Re-apply exports file
+    await nfs_export_service.write_exports_file(db)
+    await nfs_export_service.apply_exports()
+    return {"detail": "Deleted"}
+
+
+@router.post("/exports/{export_id}/enable")
+async def enable_export(export_id: int, db: AsyncSession = Depends(get_db)):
+    export = await db.get(NFSExport, export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="NFS export not found")
+    result = await nfs_export_service.enable_export(export, db)
+    if result["success"]:
+        await send_alert("SUCCESS", f"NFS Export **{export.name}** aktiviert")
+    else:
+        await send_alert(
+            "ERROR",
+            f"NFS Export **{export.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+        )
+    return result
+
+
+@router.post("/exports/{export_id}/disable")
+async def disable_export(export_id: int, db: AsyncSession = Depends(get_db)):
+    export = await db.get(NFSExport, export_id)
+    if not export:
+        raise HTTPException(status_code=404, detail="NFS export not found")
+    result = await nfs_export_service.disable_export(export, db)
+    if result["success"]:
+        await send_alert("INFO", f"NFS Export **{export.name}** deaktiviert")
+    return result
+
+
+@router.get("/exports-status", response_model=list[NFSExportStatus])
+async def get_all_export_statuses(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(NFSExport))
+    exports = result.scalars().all()
+    active_lines = await nfs_export_service.get_active_exports()
+    statuses = []
+    for exp in exports:
+        is_active = any(exp.export_path in line for line in active_lines)
+        statuses.append(
+            {
+                "id": exp.id,
+                "name": exp.name,
+                "export_path": exp.export_path,
+                "is_active": is_active,
+            }
+        )
+    return statuses
+
+
+@router.post("/exports-apply")
+async def apply_all_exports(db: AsyncSession = Depends(get_db)):
+    """Write all exports to /etc/exports and apply."""
+    write_result = await nfs_export_service.write_exports_file(db)
+    if not write_result["success"]:
+        return write_result
+    result = await nfs_export_service.apply_exports()
+    if result["success"]:
+        # Mark enabled exports as active
+        res = await db.execute(
+            select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
+        )
+        for exp in res.scalars().all():
+            exp.is_active = True
+        await db.commit()
+        await send_alert("SUCCESS", "Alle NFS Exports angewendet")
+    return result

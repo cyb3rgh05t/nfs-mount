@@ -12,7 +12,12 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 import api from "../api/client";
 
 const inputClass =
@@ -33,6 +38,7 @@ function Section({ icon: Icon, title, iconColor, children }) {
 }
 
 export default function SettingsPage() {
+  const { user, updateUser } = useAuth();
   const [configs, setConfigs] = useState([]);
   const [kernelParams, setKernelParams] = useState([]);
   const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
@@ -48,6 +54,13 @@ export default function SettingsPage() {
     topic_id: "",
     enabled: false,
   });
+
+  // Profile
+  const [displayName, setDisplayName] = useState(user?.display_name || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -91,6 +104,31 @@ export default function SettingsPage() {
   const saveApiKey = () => {
     localStorage.setItem("apiKey", apiKey);
     showSuccess("API Key gespeichert");
+  };
+
+  const saveProfile = async () => {
+    try {
+      const updated = await api.updateMe({ display_name: displayName });
+      updateUser(updated);
+      showSuccess("Profil aktualisiert");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const changePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      setError("Beide Passwortfelder ausfüllen");
+      return;
+    }
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      showSuccess("Passwort geändert");
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   const saveDiscord = async () => {
@@ -170,6 +208,111 @@ export default function SettingsPage() {
           <span>{success}</span>
         </div>
       )}
+
+      {/* Profile */}
+      <Section
+        icon={User}
+        title="Profil"
+        iconColor="bg-blue-500/10 text-blue-400"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
+              Benutzername
+            </label>
+            <input
+              className={`${inputClass} opacity-60`}
+              value={user?.username || ""}
+              disabled
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
+              Anzeigename
+            </label>
+            <input
+              className={inputClass}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Dein Anzeigename"
+            />
+          </div>
+          <button
+            onClick={saveProfile}
+            className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+          >
+            <Save className="w-4 h-4" />
+            Profil speichern
+          </button>
+        </div>
+      </Section>
+
+      {/* Password Change */}
+      <Section
+        icon={Lock}
+        title="Passwort ändern"
+        iconColor="bg-red-500/10 text-red-400"
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
+              Aktuelles Passwort
+            </label>
+            <div className="relative">
+              <input
+                className={inputClass}
+                type={showCurrentPass ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPass(!showCurrentPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-nfs-muted hover:text-white"
+              >
+                {showCurrentPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
+              Neues Passwort
+            </label>
+            <div className="relative">
+              <input
+                className={inputClass}
+                type={showNewPass ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPass(!showNewPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-nfs-muted hover:text-white"
+              >
+                {showNewPass ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={changePassword}
+            className="px-4 py-2 bg-nfs-card border border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+          >
+            <Lock className="w-4 h-4" />
+            Passwort ändern
+          </button>
+        </div>
+      </Section>
 
       {/* API Key */}
       <Section

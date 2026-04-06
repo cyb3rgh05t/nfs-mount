@@ -2,6 +2,10 @@ const API_BASE = "/api";
 
 function getHeaders() {
   const headers = { "Content-Type": "application/json" };
+  const token = localStorage.getItem("token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const apiKey = localStorage.getItem("apiKey");
   if (apiKey) {
     headers["X-API-Key"] = apiKey;
@@ -18,6 +22,9 @@ async function request(method, path, body) {
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(`${API_BASE}${path}`, opts);
+  if (res.status === 401 && !path.startsWith("/auth/")) {
+    localStorage.removeItem("token");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Request failed");
@@ -26,6 +33,21 @@ async function request(method, path, body) {
 }
 
 const api = {
+  // Auth
+  login: (username, password) =>
+    request("POST", "/auth/login", { username, password }),
+  getMe: () => request("GET", "/auth/me"),
+  updateMe: (data) => request("PUT", "/auth/me", data),
+  changePassword: (current_password, new_password) =>
+    request("POST", "/auth/change-password", {
+      current_password,
+      new_password,
+    }),
+  getUsers: () => request("GET", "/auth/users"),
+  createUser: (data) => request("POST", "/auth/users", data),
+  updateUser: (id, data) => request("PUT", `/auth/users/${id}`, data),
+  deleteUser: (id) => request("DELETE", `/auth/users/${id}`),
+  checkSetup: () => request("GET", "/auth/setup-required"),
   // NFS
   getNFSMounts: () => request("GET", "/nfs/mounts"),
   createNFSMount: (data) => request("POST", "/nfs/mounts", data),
@@ -37,6 +59,16 @@ const api = {
   mountAllNFS: () => request("POST", "/nfs/mount-all"),
   unmountAllNFS: () => request("POST", "/nfs/unmount-all"),
 
+  // NFS Exports (Server)
+  getNFSExports: () => request("GET", "/nfs/exports"),
+  createNFSExport: (data) => request("POST", "/nfs/exports", data),
+  updateNFSExport: (id, data) => request("PUT", `/nfs/exports/${id}`, data),
+  deleteNFSExport: (id) => request("DELETE", `/nfs/exports/${id}`),
+  enableNFSExport: (id) => request("POST", `/nfs/exports/${id}/enable`),
+  disableNFSExport: (id) => request("POST", `/nfs/exports/${id}/disable`),
+  getNFSExportsStatus: () => request("GET", "/nfs/exports-status"),
+  applyNFSExports: () => request("POST", "/nfs/exports-apply"),
+
   // MergerFS
   getMergerFSConfigs: () => request("GET", "/mergerfs/configs"),
   createMergerFS: (data) => request("POST", "/mergerfs/configs", data),
@@ -45,6 +77,16 @@ const api = {
   mountMergerFS: (id) => request("POST", `/mergerfs/configs/${id}/mount`),
   unmountMergerFS: (id) => request("POST", `/mergerfs/configs/${id}/unmount`),
   getMergerFSStatus: () => request("GET", "/mergerfs/status"),
+
+  // VPN
+  getVPNConfigs: () => request("GET", "/vpn/configs"),
+  createVPNConfig: (data) => request("POST", "/vpn/configs", data),
+  updateVPNConfig: (id, data) => request("PUT", `/vpn/configs/${id}`, data),
+  deleteVPNConfig: (id) => request("DELETE", `/vpn/configs/${id}`),
+  connectVPN: (id) => request("POST", `/vpn/configs/${id}/connect`),
+  disconnectVPN: (id) => request("POST", `/vpn/configs/${id}/disconnect`),
+  getVPNConfigStatus: (id) => request("GET", `/vpn/configs/${id}/status`),
+  getAllVPNStatus: () => request("GET", "/vpn/status"),
 
   // System
   getHealth: () => request("GET", "/system/health"),
