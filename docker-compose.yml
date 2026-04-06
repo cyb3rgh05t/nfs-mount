@@ -1,39 +1,28 @@
-version: "3.8"
-
 services:
-  nfs-manager:
-    build: .
-    container_name: nfs-manager
-    restart: unless-stopped
+  nfs-mount:
+    hostname: "nfs-mount"
+    container_name: "nfs-mount"
+    image: "ghcr.io/cyb3rgh05t/nfs-mount:latest"
+    environment:
+      - "PUID=1000"
+      - "PGID=1000"
+      - "TZ=Europe/Berlin"
+      - "API_KEY="
+      - "DISCORD_WEBHOOK="
+      - "TELEGRAM_BOT_TOKEN="
+      - "TELEGRAM_CHAT_ID="
+      - "TELEGRAM_TOPIC_ID="
+    restart: "unless-stopped"
     privileged: true
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
-      - DAC_READ_SEARCH
     devices:
-      - /dev/fuse:/dev/fuse
+      - "/dev/fuse:/dev/fuse"
     ports:
-      - "${WEB_PORT:-8080}:8080"
+      - "8080:8080"
     volumes:
-      - ./config:/config
-      - ./data:/data
-      - /mnt:/mnt:rshared
-    environment:
-      - TZ=${TZ:-Europe/Berlin}
-      - API_KEY=${API_KEY:-}
-      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN:-}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
-      - TELEGRAM_TOPIC_ID=${TELEGRAM_TOPIC_ID:-}
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    security_opt:
-      - apparmor:unconfined
-    tmpfs:
-      - /tmp
-    networks:
-      - nfs-net
-
-networks:
-  nfs-net:
-    driver: bridge
+      - "/opt/appdata/nfs-mount/data:/data"
+      - "/mnt:/mnt:rshared"
+    labels:
+      - "dockupdater.enable=true"

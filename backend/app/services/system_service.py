@@ -10,16 +10,29 @@ logger = logging.getLogger("nfs-manager")
 
 async def _run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess:
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=timeout),
-    )
+    try:
+        return await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            ),
+        )
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(
+            cmd, returncode=127, stdout="", stderr=f"Command not found: {cmd[0]}"
+        )
 
 
 def get_system_stats() -> dict:
     """Get current system resource statistics."""
     mem = psutil.virtual_memory()
-    load = os.getloadavg()
+
+    try:
+        load = list(os.getloadavg())
+    except (AttributeError, OSError):
+        # os.getloadavg() not available on Windows
+        cpu = psutil.cpu_percent(interval=0.1)
+        load = [cpu, cpu, cpu]
 
     disks = []
     for part in psutil.disk_partitions():
@@ -53,13 +66,21 @@ def get_system_stats() -> dict:
             "packets_sent": net.packets_sent,
             "packets_recv": net.packets_recv,
         },
-        "load_avg": list(load),
+        "load_avg": load,
     }
 
 
 async def get_vpn_status() -> dict:
     """Get WireGuard VPN status."""
-    result = await _run(["wg", "show", "wg0"])
+    try:
+        result = await _run(["wg", "show", "wg0"])
+    except Exception:
+        return {
+            "active": False,
+            "interface": "wg0",
+            "peers": [],
+            "transfer": {},
+        }
     if result.returncode != 0:
         return {
             "active": False,

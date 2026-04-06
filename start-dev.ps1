@@ -26,6 +26,10 @@ if (-not (Test-Path $venvPython)) {
     }
 }
 
+# Upgrade pip first to ensure latest wheel support
+Write-Host "[SETUP] Upgrade pip..." -ForegroundColor DarkGray
+& $venvPython -m pip install --upgrade pip -q 2>$null
+
 Write-Host "[SETUP] Installiere Python Dependencies..." -ForegroundColor Yellow
 & $venvPip install -q -r (Join-Path $ROOT "backend\requirements.txt")
 if ($LASTEXITCODE -ne 0) {

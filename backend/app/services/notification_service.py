@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 
 import httpx
@@ -11,9 +12,19 @@ from sqlalchemy import select
 logger = logging.getLogger("nfs-manager")
 
 
-async def _get_configs() -> list[NotificationConfig]:
+@dataclass
+class _FallbackConfig:
+    type: str = ""
+    enabled: bool = False
+    webhook_url: str = ""
+    bot_token: str = ""
+    chat_id: str = ""
+    topic_id: str = ""
+
+
+async def _get_configs() -> list:
     """Get all enabled notification configs from DB, falling back to env vars."""
-    configs = []
+    configs: list = []
     try:
         async with async_session() as session:
             rows = await session.execute(
@@ -28,19 +39,23 @@ async def _get_configs() -> list[NotificationConfig]:
     # Fallback to environment variables if no DB configs
     if not configs:
         if settings.discord_webhook:
-            fake = NotificationConfig()
-            fake.type = "discord"
-            fake.enabled = True
-            fake.webhook_url = settings.discord_webhook
-            configs.append(fake)
+            configs.append(
+                _FallbackConfig(
+                    type="discord",
+                    enabled=True,
+                    webhook_url=settings.discord_webhook,
+                )
+            )
         if settings.telegram_token and settings.telegram_chat_id:
-            fake = NotificationConfig()
-            fake.type = "telegram"
-            fake.enabled = True
-            fake.bot_token = settings.telegram_token
-            fake.chat_id = settings.telegram_chat_id
-            fake.topic_id = settings.telegram_topic_id or ""
-            configs.append(fake)
+            configs.append(
+                _FallbackConfig(
+                    type="telegram",
+                    enabled=True,
+                    bot_token=settings.telegram_token,
+                    chat_id=settings.telegram_chat_id,
+                    topic_id=settings.telegram_topic_id or "",
+                )
+            )
 
     return configs
 

@@ -7,15 +7,18 @@ const DEFAULT_OPTIONS =
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-nfs-card border border-nfs-border rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between p-6 pb-4">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-nfs-muted hover:text-white hover:bg-nfs-input transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-        {children}
+        <div className="px-6 pb-6">{children}</div>
       </div>
     </div>
   );
@@ -24,7 +27,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, children }) {
   return (
     <div className="mb-3">
-      <label className="block text-sm font-medium text-gray-400 mb-1">
+      <label className="block text-sm font-medium text-nfs-muted mb-1.5">
         {label}
       </label>
       {children}
@@ -33,7 +36,7 @@ function Field({ label, children }) {
 }
 
 const inputClass =
-  "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500";
+  "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
 
 export default function MergerFSPage() {
   const [configs, setConfigs] = useState([]);
@@ -150,13 +153,15 @@ export default function MergerFSPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <GitMerge className="w-7 h-7 text-purple-400" />
-          <h1 className="text-2xl font-bold text-white">MergerFS</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-500/10">
+            <GitMerge className="w-5 h-5 text-purple-400" />
+          </div>
+          MergerFS
+        </h1>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
           Neue Config
@@ -164,11 +169,11 @@ export default function MergerFSPage() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm flex items-center justify-between">
-          {error}
+        <div className="flex items-center justify-between gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
+          <span>{error}</span>
           <button
             onClick={() => setError("")}
-            className="text-red-400 hover:text-red-300"
+            className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
           >
             <X className="w-4 h-4" />
           </button>
@@ -176,8 +181,8 @@ export default function MergerFSPage() {
       )}
 
       {/* Info Box */}
-      <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 mb-6">
-        <p className="text-xs text-gray-400">
+      <div className="bg-nfs-card border border-purple-500/20 rounded-xl p-4 mb-6">
+        <p className="text-xs text-nfs-muted leading-relaxed">
           MergerFS vereint mehrere Speicher-Pfade zu einem einzigen Mount.
           Optimiert mit full file caching, readdir cache, 120s attribute caching
           für maximale Streaming-Performance.
@@ -185,12 +190,12 @@ export default function MergerFSPage() {
       </div>
 
       {configs.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
+        <div className="text-center py-16 text-nfs-muted">
           <GitMerge className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>Keine MergerFS Configs vorhanden</p>
           <button
             onClick={openCreate}
-            className="mt-3 text-purple-400 hover:text-purple-300 text-sm"
+            className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
           >
             Jetzt erstellen →
           </button>
@@ -204,33 +209,36 @@ export default function MergerFSPage() {
             return (
               <div
                 key={c.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+                className="bg-nfs-card border border-nfs-border rounded-xl p-4 hover:border-nfs-muted transition-all"
               >
                 <div className="flex items-center gap-4">
                   <div
                     className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                      mounted ? "bg-emerald-500" : "bg-gray-600"
+                      mounted ? "bg-emerald-400 animate-pulse" : "bg-nfs-muted"
                     }`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-white">{c.name}</span>
                       <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
                           mounted
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-gray-700 text-gray-400"
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-slate-500/15 text-slate-400 border-slate-500/30"
                         }`}
                       >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${mounted ? "bg-emerald-400" : "bg-slate-400"}`}
+                        />
                         {mounted ? "Mounted" : "Unmounted"}
                       </span>
                       {c.auto_mount && (
-                        <span className="text-xs bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-purple-500/15 text-purple-400 border-purple-500/30">
                           Auto
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-xs text-nfs-muted mt-0.5 font-mono">
                       → {c.mount_point}
                     </p>
                   </div>
@@ -240,7 +248,7 @@ export default function MergerFSPage() {
                       <button
                         onClick={() => handleUnmount(c.id)}
                         disabled={loading === `unmount-${c.id}`}
-                        className="p-2 text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Unmount"
                       >
                         <Square className="w-4 h-4" />
@@ -249,7 +257,7 @@ export default function MergerFSPage() {
                       <button
                         onClick={() => handleMount(c.id)}
                         disabled={loading === `mount-${c.id}`}
-                        className="p-2 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Mount"
                       >
                         <Play className="w-4 h-4" />
@@ -257,13 +265,13 @@ export default function MergerFSPage() {
                     )}
                     <button
                       onClick={() => openEdit(c)}
-                      className="p-2 text-gray-400 hover:bg-gray-800 rounded-lg transition-colors"
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -272,12 +280,14 @@ export default function MergerFSPage() {
 
                 {/* Sources */}
                 <div className="mt-3 pl-7">
-                  <p className="text-xs text-gray-500 mb-1">Quellen:</p>
+                  <p className="text-[10px] font-semibold text-nfs-muted uppercase tracking-wider mb-1">
+                    Quellen
+                  </p>
                   <div className="flex flex-wrap gap-1">
                     {sources.map((src, i) => (
                       <span
                         key={i}
-                        className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded"
+                        className="text-xs bg-nfs-input/50 text-nfs-text px-2 py-1 rounded font-mono"
                       >
                         {src}
                       </span>
@@ -332,7 +342,7 @@ export default function MergerFSPage() {
             />
           </Field>
           <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-nfs-text">
               <input
                 type="checkbox"
                 checked={form.auto_mount}
@@ -342,7 +352,7 @@ export default function MergerFSPage() {
               />
               Auto-Mount
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-nfs-text">
               <input
                 type="checkbox"
                 checked={form.enabled}
@@ -353,16 +363,16 @@ export default function MergerFSPage() {
               Aktiviert
             </label>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowForm(false)}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
             >
               Abbrechen
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm"
+              className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
               {editing ? "Speichern" : "Erstellen"}
             </button>

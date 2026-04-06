@@ -1,4 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from ..database import Base
@@ -7,11 +11,11 @@ from ..database import Base
 class MergerFSConfig(Base):
     __tablename__ = "mergerfs_configs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    mount_point = Column(String(512), nullable=False, unique=True)
-    sources = Column(Text, nullable=False)  # JSON array of source paths
-    options = Column(
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    mount_point: Mapped[str] = mapped_column(String(512), unique=True)
+    sources: Mapped[str] = mapped_column(Text)  # JSON array of source paths
+    options: Mapped[str] = mapped_column(
         Text,
         default=(
             "rw,async_read=true,use_ino,allow_other,"
@@ -22,7 +26,9 @@ class MergerFSConfig(Base):
             "minfreespace=10G,fsname=mergerfs"
         ),
     )
-    auto_mount = Column(Boolean, default=True)
-    enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    auto_mount: Mapped[bool] = mapped_column(default=True)
+    enabled: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[Optional[datetime]] = mapped_column(server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        server_default=func.now(), onupdate=func.now()
+    )

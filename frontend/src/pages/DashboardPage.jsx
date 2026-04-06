@@ -11,24 +11,27 @@ import {
 } from "lucide-react";
 import api from "../api/client";
 
-function StatCard({ icon: Icon, label, value, sub, color = "blue" }) {
-  const colors = {
-    blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    green: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    purple: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-    orange: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-    red: "bg-red-500/10 text-red-400 border-red-500/20",
+function StatCard({ icon: Icon, label, value, sub, color = "nfs-primary" }) {
+  const colorMap = {
+    "nfs-primary": "bg-nfs-primary/10 text-nfs-primary",
+    emerald: "bg-emerald-500/10 text-emerald-400",
+    purple: "bg-purple-500/10 text-purple-400",
+    blue: "bg-blue-500/10 text-blue-400",
   };
   return (
-    <div className={`rounded-xl border p-5 ${colors[color]}`}>
+    <div className="bg-nfs-card border border-nfs-border rounded-xl p-4 min-w-0 hover:border-nfs-primary/30 transition-colors">
       <div className="flex items-center justify-between mb-3">
-        <Icon className="w-5 h-5 opacity-80" />
-        <span className="text-xs opacity-60 uppercase tracking-wider">
+        <div
+          className={`p-2 rounded-lg ${colorMap[color] || colorMap["nfs-primary"]}`}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+        <span className="text-[10px] font-semibold text-nfs-muted uppercase tracking-wider">
           {label}
         </span>
       </div>
-      <p className="text-2xl font-bold">{value}</p>
-      {sub && <p className="text-xs opacity-60 mt-1">{sub}</p>}
+      <p className="text-xl font-bold text-white">{value}</p>
+      {sub && <p className="text-xs text-nfs-muted mt-1">{sub}</p>}
     </div>
   );
 }
@@ -84,19 +87,21 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          Dashboard
+        </h1>
+        <div className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border rounded-lg">
           <div
-            className={`w-2 h-2 rounded-full ${status ? "bg-emerald-500" : "bg-red-500"}`}
+            className={`w-2 h-2 rounded-full ${status ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`}
           />
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-nfs-muted">
             {status ? "System Online" : "Connecting..."}
           </span>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-6 text-red-400 text-sm">
+        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-6">
           {error}
         </div>
       )}
@@ -107,7 +112,7 @@ export default function DashboardPage() {
           icon={Activity}
           label="Uptime"
           value={status ? formatUptime(status.uptime) : "—"}
-          color="blue"
+          color="nfs-primary"
         />
         <StatCard
           icon={Cpu}
@@ -129,30 +134,32 @@ export default function DashboardPage() {
               ? `${formatBytes(stats.memory_used)} / ${formatBytes(stats.memory_total)}`
               : ""
           }
-          color="orange"
+          color="blue"
         />
         <StatCard
           icon={Network}
           label="Network I/O"
           value={stats ? `↓${formatBytes(stats.network_io.bytes_recv)}` : "—"}
           sub={stats ? `↑${formatBytes(stats.network_io.bytes_sent)}` : ""}
-          color="green"
+          color="emerald"
         />
       </div>
 
       {/* Mount Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* NFS Mounts */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
           <div className="flex items-center gap-2 mb-4">
-            <HardDrive className="w-5 h-5 text-blue-400" />
+            <div className="p-2 rounded-lg bg-nfs-primary/10">
+              <HardDrive className="w-4 h-4 text-nfs-primary" />
+            </div>
             <h2 className="text-lg font-semibold text-white">NFS Mounts</h2>
-            <span className="ml-auto text-sm text-gray-500">
+            <span className="ml-auto text-xs text-nfs-muted">
               {status?.nfs_mounts_active || 0} aktiv
             </span>
           </div>
           {nfsStatus.length === 0 ? (
-            <p className="text-gray-500 text-sm">
+            <p className="text-nfs-muted text-sm">
               Keine NFS Mounts konfiguriert
             </p>
           ) : (
@@ -160,28 +167,31 @@ export default function DashboardPage() {
               {nfsStatus.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between bg-gray-800/50 rounded-lg px-4 py-3"
+                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
                 >
                   <div>
                     <p className="text-sm font-medium text-white">{m.name}</p>
-                    <p className="text-xs text-gray-500">{m.local_path}</p>
+                    <p className="text-xs text-nfs-muted">{m.local_path}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1.5">
-                      <Server className="w-3.5 h-3.5 text-gray-500" />
+                      <Server className="w-3.5 h-3.5 text-nfs-muted" />
                       <span
-                        className={`w-2 h-2 rounded-full ${
-                          m.server_reachable ? "bg-emerald-500" : "bg-red-500"
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          m.server_reachable ? "bg-emerald-400" : "bg-red-400"
                         }`}
                       />
                     </span>
                     <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
                         m.mounted
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-red-500/20 text-red-400"
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/15 text-red-400 border-red-500/30"
                       }`}
                     >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${m.mounted ? "bg-emerald-400" : "bg-red-400"}`}
+                      />
                       {m.mounted ? "Mounted" : "Unmounted"}
                     </span>
                   </div>
@@ -192,16 +202,18 @@ export default function DashboardPage() {
         </div>
 
         {/* MergerFS */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
           <div className="flex items-center gap-2 mb-4">
-            <GitMerge className="w-5 h-5 text-purple-400" />
+            <div className="p-2 rounded-lg bg-purple-500/10">
+              <GitMerge className="w-4 h-4 text-purple-400" />
+            </div>
             <h2 className="text-lg font-semibold text-white">MergerFS</h2>
-            <span className="ml-auto text-sm text-gray-500">
+            <span className="ml-auto text-xs text-nfs-muted">
               {status?.mergerfs_mounts_active || 0} aktiv
             </span>
           </div>
           {mergerStatus.length === 0 ? (
-            <p className="text-gray-500 text-sm">
+            <p className="text-nfs-muted text-sm">
               Keine MergerFS Configs konfiguriert
             </p>
           ) : (
@@ -209,19 +221,22 @@ export default function DashboardPage() {
               {mergerStatus.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between bg-gray-800/50 rounded-lg px-4 py-3"
+                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
                 >
                   <div>
                     <p className="text-sm font-medium text-white">{c.name}</p>
-                    <p className="text-xs text-gray-500">{c.mount_point}</p>
+                    <p className="text-xs text-nfs-muted">{c.mount_point}</p>
                   </div>
                   <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
                       c.mounted
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-red-500/20 text-red-400"
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : "bg-red-500/15 text-red-400 border-red-500/30"
                     }`}
                   >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
+                    />
                     {c.mounted ? "Mounted" : "Unmounted"}
                   </span>
                 </div>
@@ -233,31 +248,37 @@ export default function DashboardPage() {
 
       {/* VPN & Kernel Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
           <div className="flex items-center gap-2 mb-4">
-            <Shield className="w-5 h-5 text-green-400" />
+            <div className="p-2 rounded-lg bg-emerald-500/10">
+              <Shield className="w-4 h-4 text-emerald-400" />
+            </div>
             <h2 className="text-lg font-semibold text-white">VPN Status</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-nfs-input/50 rounded-lg px-4 py-3">
             <div
-              className={`w-3 h-3 rounded-full ${
-                status?.vpn_active ? "bg-emerald-500" : "bg-gray-600"
+              className={`w-2 h-2 rounded-full ${
+                status?.vpn_active
+                  ? "bg-emerald-400 animate-pulse"
+                  : "bg-nfs-muted"
               }`}
             />
-            <span className="text-sm text-gray-300">
+            <span className="text-sm text-nfs-text">
               WireGuard: {status?.vpn_active ? "Verbunden" : "Nicht aktiv"}
             </span>
           </div>
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
           <div className="flex items-center gap-2 mb-4">
-            <Cpu className="w-5 h-5 text-orange-400" />
+            <div className="p-2 rounded-lg bg-nfs-primary/10">
+              <Cpu className="w-4 h-4 text-nfs-primary" />
+            </div>
             <h2 className="text-lg font-semibold text-white">
               Streaming Optimierung
             </h2>
           </div>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-nfs-muted leading-relaxed">
             Kernel-Tuning aktiv für 300+ gleichzeitige Streams. NFS nconnect=16,
             1MB R/W Buffer.
           </p>

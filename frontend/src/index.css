@@ -3,25 +3,43 @@
 @tailwind utilities;
 
 body {
-  font-family:
-    "Inter",
-    system-ui,
-    -apple-system,
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
+  @apply bg-nfs-bg text-nfs-text antialiased;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgb(17 24 39);
+  background: #0a0a0a;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgb(55 65 81);
-  border-radius: 3px;
+  background: #373737;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(75 85 99);
+  background: #4a4a4a;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #c1c1c1;
+  -webkit-box-shadow: 0 0 0px 1000px #1f1f1f inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+select {
+  background-color: #1f1f1f !important;
+  color: #c1c1c1 !important;
+}
+
+select option {
+  background-color: #1f1f1f !important;
+  color: #c1c1c1 !important;
+}
+
+select option:checked {
+  background: linear-gradient(#d8ed18, #d8ed18) !important;
+  color: #000000 !important;
 }

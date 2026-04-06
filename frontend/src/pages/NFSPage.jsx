@@ -17,15 +17,18 @@ const DEFAULT_OPTIONS =
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg mx-4 p-6">
-        <div className="flex items-center justify-between mb-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-nfs-card border border-nfs-border rounded-2xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between p-6 pb-4">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X className="w-5 h-5" />
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-nfs-muted hover:text-white hover:bg-nfs-input transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-        {children}
+        <div className="px-6 pb-6">{children}</div>
       </div>
     </div>
   );
@@ -34,7 +37,7 @@ function Modal({ title, onClose, children }) {
 function Field({ label, children }) {
   return (
     <div className="mb-3">
-      <label className="block text-sm font-medium text-gray-400 mb-1">
+      <label className="block text-sm font-medium text-nfs-muted mb-1.5">
         {label}
       </label>
       {children}
@@ -43,7 +46,7 @@ function Field({ label, children }) {
 }
 
 const inputClass =
-  "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500";
+  "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
 
 export default function NFSPage() {
   const [mounts, setMounts] = useState([]);
@@ -167,22 +170,24 @@ export default function NFSPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <HardDrive className="w-7 h-7 text-blue-400" />
-          <h1 className="text-2xl font-bold text-white">NFS Mounts</h1>
-        </div>
+        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-nfs-primary/10">
+            <HardDrive className="w-5 h-5 text-nfs-primary" />
+          </div>
+          NFS Mounts
+        </h1>
         <div className="flex gap-2">
           <button
             onClick={handleMountAll}
             disabled={loading === "mount-all"}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
           >
             <Zap className="w-4 h-4" />
             Mount All
           </button>
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
           >
             <Plus className="w-4 h-4" />
             Neuer Mount
@@ -191,11 +196,11 @@ export default function NFSPage() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm flex items-center justify-between">
-          {error}
+        <div className="flex items-center justify-between gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
+          <span>{error}</span>
           <button
             onClick={() => setError("")}
-            className="text-red-400 hover:text-red-300"
+            className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
           >
             <X className="w-4 h-4" />
           </button>
@@ -203,14 +208,14 @@ export default function NFSPage() {
       )}
 
       {/* NFS Options Info */}
-      <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 mb-6">
+      <div className="bg-nfs-card border border-nfs-primary/20 rounded-xl p-4 mb-6">
         <div className="flex items-center gap-2 mb-2">
-          <Zap className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-medium text-blue-400">
+          <Zap className="w-4 h-4 text-nfs-primary" />
+          <span className="text-sm font-medium text-nfs-primary">
             Streaming-Optimiert
           </span>
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-nfs-muted leading-relaxed">
           NFSv4.2 mit nconnect=16 (16 parallele TCP-Verbindungen), 1MB R/W
           Buffer, Attribute-Caching (1h), nocto, noatime — optimiert für 300+
           gleichzeitige Streams.
@@ -219,12 +224,12 @@ export default function NFSPage() {
 
       {/* Mounts Table */}
       {mounts.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
+        <div className="text-center py-16 text-nfs-muted">
           <HardDrive className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p>Keine NFS Mounts konfiguriert</p>
           <button
             onClick={openCreate}
-            className="mt-3 text-blue-400 hover:text-blue-300 text-sm"
+            className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
           >
             Jetzt erstellen →
           </button>
@@ -237,12 +242,12 @@ export default function NFSPage() {
             return (
               <div
                 key={m.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4"
+                className="bg-nfs-card border border-nfs-border rounded-xl p-4 flex items-center gap-4 hover:border-nfs-muted transition-all"
               >
                 {/* Status Indicator */}
                 <div
                   className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                    mounted ? "bg-emerald-500" : "bg-gray-600"
+                    mounted ? "bg-emerald-400 animate-pulse" : "bg-nfs-muted"
                   }`}
                 />
 
@@ -251,26 +256,26 @@ export default function NFSPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-white">{m.name}</span>
                     {!m.enabled && (
-                      <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded">
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
                         Deaktiviert
                       </span>
                     )}
                     {m.auto_mount && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
                         Auto
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
+                  <p className="text-xs text-nfs-muted truncate mt-0.5 font-mono">
                     {m.server_ip}:{m.remote_path} → {m.local_path}
                   </p>
                 </div>
 
                 {/* Server Status */}
-                <div className="flex items-center gap-1 text-xs text-gray-500">
+                <div className="flex items-center gap-1.5 text-xs text-nfs-muted">
                   <div
                     className={`w-1.5 h-1.5 rounded-full ${
-                      st?.server_reachable ? "bg-emerald-500" : "bg-red-500"
+                      st?.server_reachable ? "bg-emerald-400" : "bg-red-400"
                     }`}
                   />
                   Server
@@ -282,7 +287,7 @@ export default function NFSPage() {
                     <button
                       onClick={() => handleUnmount(m.id)}
                       disabled={loading === `unmount-${m.id}`}
-                      className="p-2 text-orange-400 hover:bg-orange-500/10 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
                       title="Unmount"
                     >
                       <Square className="w-4 h-4" />
@@ -291,7 +296,7 @@ export default function NFSPage() {
                     <button
                       onClick={() => handleMount(m.id)}
                       disabled={loading === `mount-${m.id}`}
-                      className="p-2 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
                       title="Mount"
                     >
                       <Play className="w-4 h-4" />
@@ -299,14 +304,14 @@ export default function NFSPage() {
                   )}
                   <button
                     onClick={() => openEdit(m)}
-                    className="p-2 text-gray-400 hover:bg-gray-800 rounded-lg transition-colors"
+                    className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
                     title="Bearbeiten"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(m.id)}
-                    className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
                     title="Löschen"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -392,39 +397,39 @@ export default function NFSPage() {
             />
           </Field>
           <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-nfs-text">
               <input
                 type="checkbox"
                 checked={form.auto_mount}
                 onChange={(e) =>
                   setForm({ ...form, auto_mount: e.target.checked })
                 }
-                className="rounded border-gray-600"
+                className="rounded border-nfs-border"
               />
               Auto-Mount
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm text-nfs-text">
               <input
                 type="checkbox"
                 checked={form.enabled}
                 onChange={(e) =>
                   setForm({ ...form, enabled: e.target.checked })
                 }
-                className="rounded border-gray-600"
+                className="rounded border-nfs-border"
               />
               Aktiviert
             </label>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowForm(false)}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
             >
               Abbrechen
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"
+              className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
               {editing ? "Speichern" : "Erstellen"}
             </button>

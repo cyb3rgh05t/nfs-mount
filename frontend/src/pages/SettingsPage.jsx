@@ -10,17 +10,21 @@ import {
   Key,
   Cpu,
   X,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import api from "../api/client";
 
 const inputClass =
-  "w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500";
+  "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
 
-function Section({ icon: Icon, title, color, children }) {
+function Section({ icon: Icon, title, iconColor, children }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Icon className={`w-5 h-5 text-${color}-400`} />
+    <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+      <div className="flex items-center gap-3 mb-4">
+        <div className={`p-2 rounded-lg ${iconColor}`}>
+          <Icon className="w-4 h-4" />
+        </div>
         <h2 className="text-lg font-semibold text-white">{title}</h2>
       </div>
       {children}
@@ -139,28 +143,41 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Settings className="w-7 h-7 text-gray-400" />
-        <h1 className="text-2xl font-bold text-white">Einstellungen</h1>
-      </div>
+      <h1 className="text-2xl font-bold text-white flex items-center gap-3 mb-6">
+        <div className="p-2 rounded-lg bg-nfs-primary/10">
+          <Settings className="w-5 h-5 text-nfs-primary" />
+        </div>
+        Einstellungen
+      </h1>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 text-red-400 text-sm flex items-center justify-between">
-          {error}
-          <button onClick={() => setError("")}>
+        <div className="flex items-center justify-between gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => setError("")}
+            className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
       {success && (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 mb-4 text-emerald-400 text-sm">
-          {success}
+        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm mb-4">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          <span>{success}</span>
         </div>
       )}
 
       {/* API Key */}
-      <Section icon={Key} title="API Key" color="yellow">
-        <p className="text-xs text-gray-500 mb-3">
+      <Section
+        icon={Key}
+        title="API Key"
+        iconColor="bg-nfs-primary/10 text-nfs-primary"
+      >
+        <p className="text-xs text-nfs-muted mb-3 leading-relaxed">
           Setze einen API Key um die REST API abzusichern. Der Key wird im
           Browser gespeichert.
         </p>
@@ -174,7 +191,7 @@ export default function SettingsPage() {
           />
           <button
             onClick={saveApiKey}
-            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm flex items-center gap-2"
+            className="px-4 py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm flex items-center gap-2 transition-colors shrink-0"
           >
             <Save className="w-4 h-4" />
             Speichern
@@ -186,10 +203,10 @@ export default function SettingsPage() {
       <Section
         icon={MessageSquare}
         title="Discord Benachrichtigungen"
-        color="indigo"
+        iconColor="bg-indigo-500/10 text-indigo-400"
       >
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm text-gray-300">
+          <label className="flex items-center gap-2 text-sm text-nfs-text">
             <input
               type="checkbox"
               checked={discordForm.enabled}
@@ -200,7 +217,7 @@ export default function SettingsPage() {
             Aktiviert
           </label>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
               Webhook URL
             </label>
             <input
@@ -215,14 +232,14 @@ export default function SettingsPage() {
           <div className="flex gap-2">
             <button
               onClick={saveDiscord}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm flex items-center gap-2"
+              className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
             >
               <Save className="w-4 h-4" />
               Speichern
             </button>
             <button
               onClick={testDiscord}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm flex items-center gap-2"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm flex items-center gap-2 transition-all"
             >
               <Send className="w-4 h-4" />
               Test
@@ -232,9 +249,13 @@ export default function SettingsPage() {
       </Section>
 
       {/* Telegram */}
-      <Section icon={Send} title="Telegram Benachrichtigungen" color="blue">
+      <Section
+        icon={Send}
+        title="Telegram Benachrichtigungen"
+        iconColor="bg-blue-500/10 text-blue-400"
+      >
         <div className="space-y-3">
-          <label className="flex items-center gap-2 text-sm text-gray-300">
+          <label className="flex items-center gap-2 text-sm text-nfs-text">
             <input
               type="checkbox"
               checked={telegramForm.enabled}
@@ -246,7 +267,7 @@ export default function SettingsPage() {
           </label>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">
+              <label className="block text-sm font-medium text-nfs-muted mb-1.5">
                 Bot Token
               </label>
               <input
@@ -263,7 +284,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">
+              <label className="block text-sm font-medium text-nfs-muted mb-1.5">
                 Chat ID
               </label>
               <input
@@ -277,7 +298,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
+            <label className="block text-sm font-medium text-nfs-muted mb-1.5">
               Topic ID (optional)
             </label>
             <input
@@ -292,14 +313,14 @@ export default function SettingsPage() {
           <div className="flex gap-2">
             <button
               onClick={saveTelegram}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2"
+              className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
             >
               <Save className="w-4 h-4" />
               Speichern
             </button>
             <button
               onClick={testTelegram}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm flex items-center gap-2"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm flex items-center gap-2 transition-all"
             >
               <Send className="w-4 h-4" />
               Test
@@ -309,8 +330,12 @@ export default function SettingsPage() {
       </Section>
 
       {/* Kernel Tuning */}
-      <Section icon={Cpu} title="Kernel Tuning (NFS Streaming)" color="orange">
-        <p className="text-xs text-gray-500 mb-3">
+      <Section
+        icon={Cpu}
+        title="Kernel Tuning (NFS Streaming)"
+        iconColor="bg-amber-500/10 text-amber-400"
+      >
+        <p className="text-xs text-nfs-muted mb-3 leading-relaxed">
           Aktuelle Kernel-Parameter für NFS Streaming-Optimierung (300+
           Streams).
         </p>
@@ -319,17 +344,19 @@ export default function SettingsPage() {
             {kernelParams.map((p) => (
               <div
                 key={p.name}
-                className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2"
+                className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-2.5"
               >
-                <code className="text-xs text-gray-300">{p.name}</code>
-                <code className="text-xs text-emerald-400 font-mono">
+                <code className="text-xs text-nfs-text font-mono">
+                  {p.name}
+                </code>
+                <code className="text-xs text-nfs-primary font-mono font-semibold">
                   {p.value}
                 </code>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Keine Parameter verfügbar</p>
+          <p className="text-sm text-nfs-muted">Keine Parameter verfügbar</p>
         )}
       </Section>
     </div>
