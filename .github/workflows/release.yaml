@@ -78,6 +78,10 @@ jobs:
             type=raw,value=dev,enable=${{ github.event_name == 'push' && github.ref_name == 'dev' }}
             type=sha,prefix=dev-,enable=${{ github.event_name == 'push' && github.ref_name == 'dev' }}
 
+            # Main branch tags (latest on push to main)
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref_name == 'main' }}
+            type=sha,prefix=main-,enable=${{ github.event_name == 'push' && github.ref_name == 'main' }}
+
             # Nightly tags (only on nightly branch)
             type=raw,value=nightly,enable=${{ github.event_name == 'push' && github.ref_name == 'nightly' }}
             type=sha,prefix=nightly-,enable=${{ github.event_name == 'push' && github.ref_name == 'nightly' }}
