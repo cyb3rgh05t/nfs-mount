@@ -17,7 +17,9 @@ async def _get_configs() -> list[NotificationConfig]:
     try:
         async with async_session() as session:
             rows = await session.execute(
-                select(NotificationConfig).where(NotificationConfig.enabled == True)  # noqa: E712
+                select(NotificationConfig).where(
+                    NotificationConfig.enabled == True
+                )  # noqa: E712
             )
             configs = list(rows.scalars().all())
     except Exception:

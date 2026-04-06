@@ -34,7 +34,11 @@ def is_mounted(path: str) -> bool:
 async def mount_mergerfs(config: MergerFSConfig) -> dict:
     """Mount a MergerFS union."""
     mount_point = config.mount_point
-    sources = json.loads(config.sources) if isinstance(config.sources, str) else config.sources
+    sources = (
+        json.loads(config.sources)
+        if isinstance(config.sources, str)
+        else config.sources
+    )
     options = config.options or "rw,use_ino,allow_other"
 
     os.makedirs(mount_point, exist_ok=True)
@@ -51,9 +55,7 @@ async def mount_mergerfs(config: MergerFSConfig) -> dict:
     source_str = ":".join(sources)
     logger.info(f"Mounting MergerFS {source_str} -> {mount_point}")
 
-    result = await _run(
-        ["mergerfs", "-o", options, source_str, mount_point]
-    )
+    result = await _run(["mergerfs", "-o", options, source_str, mount_point])
 
     if result.returncode != 0:
         logger.error(f"MergerFS mount failed: {result.stderr}")

@@ -1,9 +1,9 @@
-import { Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import DashboardPage from './pages/DashboardPage';
-import NFSPage from './pages/NFSPage';
-import MergerFSPage from './pages/MergerFSPage';
-import SettingsPage from './pages/SettingsPage';
+import { Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout";
+import DashboardPage from "./pages/DashboardPage";
+import NFSPage from "./pages/NFSPage";
+import MergerFSPage from "./pages/MergerFSPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (

@@ -1,17 +1,17 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
   HardDrive,
   GitMerge,
   Settings,
   FolderSync,
-} from 'lucide-react';
+} from "lucide-react";
 
 const links = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/nfs', label: 'NFS Mounts', icon: HardDrive },
-  { to: '/mergerfs', label: 'MergerFS', icon: GitMerge },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/nfs", label: "NFS Mounts", icon: HardDrive },
+  { to: "/mergerfs", label: "MergerFS", icon: GitMerge },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -34,12 +34,12 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
+            end={to === "/"}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-blue-600/20 text-blue-400'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  ? "bg-blue-600/20 text-blue-400"
+                  : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
               }`
             }
           >

@@ -118,7 +118,10 @@ async def mount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
     if result["success"]:
         await send_alert("SUCCESS", f"MergerFS **{config.name}** erfolgreich gemountet")
     else:
-        await send_alert("ERROR", f"MergerFS **{config.name}** fehlgeschlagen: {result.get('error', 'Unknown')}")
+        await send_alert(
+            "ERROR",
+            f"MergerFS **{config.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+        )
     return result
 
 

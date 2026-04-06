@@ -47,7 +47,9 @@ app = FastAPI(
 app.include_router(nfs.router, prefix="/api/nfs", tags=["NFS"])
 app.include_router(mergerfs.router, prefix="/api/mergerfs", tags=["MergerFS"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
-app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(
+    notifications.router, prefix="/api/notifications", tags=["Notifications"]
+)
 
 # Serve frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")

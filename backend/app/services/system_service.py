@@ -132,7 +132,9 @@ async def apply_kernel_tuning(params: list[dict]) -> list[dict]:
         # Basic validation – only allow known sysctl paths
         allowed_prefixes = ("sunrpc.", "net.core.", "net.ipv4.", "vm.")
         if not any(name.startswith(pfx) for pfx in allowed_prefixes):
-            results.append({"name": name, "success": False, "error": "Parameter not allowed"})
+            results.append(
+                {"name": name, "success": False, "error": "Parameter not allowed"}
+            )
             continue
 
         result = await _run(["sysctl", "-w", f"{name}={value}"])
@@ -160,9 +162,7 @@ def get_logs(lines: int = 100) -> list[dict]:
                 line = line.strip()
                 if not line:
                     continue
-                entries.append(
-                    {"timestamp": "", "level": "INFO", "message": line}
-                )
+                entries.append({"timestamp": "", "level": "INFO", "message": line})
     except Exception:
         pass
     return entries
@@ -175,9 +175,13 @@ def count_active_mounts(mount_type: str = "nfs") -> int:
         with open("/proc/mounts", "r") as f:
             for line in f:
                 parts = line.split()
-                if mount_type == "nfs" and ("nfs" in parts[2] if len(parts) > 2 else False):
+                if mount_type == "nfs" and (
+                    "nfs" in parts[2] if len(parts) > 2 else False
+                ):
                     count += 1
-                elif mount_type == "mergerfs" and ("fuse.mergerfs" in parts[2] if len(parts) > 2 else False):
+                elif mount_type == "mergerfs" and (
+                    "fuse.mergerfs" in parts[2] if len(parts) > 2 else False
+                ):
                     count += 1
     except Exception:
         pass

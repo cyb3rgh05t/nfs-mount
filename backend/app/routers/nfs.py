@@ -78,7 +78,10 @@ async def mount_nfs(mount_id: int, db: AsyncSession = Depends(get_db)):
     if result["success"]:
         await send_alert("SUCCESS", f"NFS Mount **{mount.name}** erfolgreich gemountet")
     else:
-        await send_alert("ERROR", f"NFS Mount **{mount.name}** fehlgeschlagen: {result.get('error', 'Unknown')}")
+        await send_alert(
+            "ERROR",
+            f"NFS Mount **{mount.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+        )
     return result
 
 
