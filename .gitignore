@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+*.db
+node_modules/
+frontend/dist/
+.vite/
+*.log
+.DS_Store
+config/wg0.conf
+data/

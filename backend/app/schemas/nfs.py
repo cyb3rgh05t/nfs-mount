@@ -1,0 +1,52 @@
+from pydantic import BaseModel
+from datetime import datetime
+
+
+class NFSMountBase(BaseModel):
+    name: str
+    server_ip: str
+    remote_path: str
+    local_path: str
+    nfs_version: str = "4.2"
+    options: str = (
+        "vers=4.2,proto=tcp,hard,nconnect=16,"
+        "rsize=1048576,wsize=1048576,"
+        "async,noatime,nocto,ac,actimeo=3600"
+    )
+    check_file: str = ""
+    auto_mount: bool = True
+    enabled: bool = True
+
+
+class NFSMountCreate(NFSMountBase):
+    pass
+
+
+class NFSMountUpdate(BaseModel):
+    name: str | None = None
+    server_ip: str | None = None
+    remote_path: str | None = None
+    local_path: str | None = None
+    nfs_version: str | None = None
+    options: str | None = None
+    check_file: str | None = None
+    auto_mount: bool | None = None
+    enabled: bool | None = None
+
+
+class NFSMountResponse(NFSMountBase):
+    id: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class NFSMountStatus(BaseModel):
+    id: int
+    name: str
+    local_path: str
+    mounted: bool
+    validated: bool
+    server_reachable: bool
