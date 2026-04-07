@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import subprocess
 
 from sqlalchemy import select
@@ -93,13 +94,38 @@ async def unmount_mergerfs(mount_point: str) -> dict:
     return {"success": True}
 
 
+def _format_size(size_bytes: int) -> str:
+    """Format bytes to human-readable size."""
+    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+        if abs(size_bytes) < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} EB"
+
+
 async def get_mount_status(config: MergerFSConfig) -> dict:
-    return {
+    mounted = is_mounted(config.mount_point)
+    status = {
         "id": config.id,
         "name": config.name,
         "mount_point": config.mount_point,
-        "mounted": is_mounted(config.mount_point),
+        "mounted": mounted,
+        "total_space": None,
+        "used_space": None,
+        "free_space": None,
     }
+    if mounted:
+        try:
+            usage = shutil.disk_usage(config.mount_point)
+            status["total_space"] = _format_size(usage.total)
+            status["used_space"] = _format_size(usage.used)
+            status["free_space"] = _format_size(usage.free)
+            status["used_percent"] = (
+                round(usage.used / usage.total * 100, 1) if usage.total > 0 else 0
+            )
+        except Exception:
+            pass
+    return status
 
 
 async def auto_mount_mergerfs() -> list[dict]:

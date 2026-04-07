@@ -419,7 +419,7 @@ export default function VPNPage() {
 
                 {/* Mini info cards */}
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Interface
                     </p>
@@ -427,7 +427,7 @@ export default function VPNPage() {
                       {iface}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Endpoint
                     </p>
@@ -435,7 +435,7 @@ export default function VPNPage() {
                       {st?.endpoint || "—"}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Transfer
                     </p>
@@ -443,7 +443,7 @@ export default function VPNPage() {
                       {st?.transfer?.raw || "—"}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Type
                     </p>

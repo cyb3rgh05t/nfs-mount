@@ -366,7 +366,7 @@ function MountsTab() {
 
                 {/* Mini info cards */}
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Server
                     </p>
@@ -374,7 +374,7 @@ function MountsTab() {
                       {m.server_ip}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Remote Path
                     </p>
@@ -382,7 +382,7 @@ function MountsTab() {
                       {m.remote_path}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Local Path
                     </p>
@@ -390,7 +390,7 @@ function MountsTab() {
                       {m.local_path}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Server Status
                     </p>
@@ -819,7 +819,7 @@ function ExportsTab() {
 
                 {/* Mini info cards */}
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Export Path
                     </p>
@@ -827,7 +827,7 @@ function ExportsTab() {
                       {exp.export_path}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Allowed Hosts
                     </p>
@@ -835,7 +835,7 @@ function ExportsTab() {
                       {exp.allowed_hosts}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2 sm:col-span-1 col-span-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2 sm:col-span-1 col-span-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Options
                     </p>

@@ -263,10 +263,6 @@ export default function MergerFSPage() {
             const st = statuses[c.id];
             const mounted = st?.mounted || false;
             const sources = Array.isArray(c.sources) ? c.sources : [];
-            const policyMatch = c.options?.match(/category\.create=(\w+)/);
-            const policy = policyMatch ? policyMatch[1] : "—";
-            const minFreeMatch = c.options?.match(/minfreespace=([^\s,]+)/);
-            const minFree = minFreeMatch ? minFreeMatch[1] : "—";
             return (
               <div
                 key={c.id}
@@ -339,7 +335,7 @@ export default function MergerFSPage() {
 
                 {/* Mini info cards */}
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Mount Point
                     </p>
@@ -347,43 +343,61 @@ export default function MergerFSPage() {
                       {c.mount_point}
                     </p>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Sources
                     </p>
-                    <p className="text-xs text-white mt-0.5">
-                      {sources.length} path{sources.length !== 1 ? "s" : ""}
-                    </p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {sources.map((src, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] bg-nfs-card border border-nfs-border rounded px-1.5 py-0.5 font-mono text-nfs-text truncate max-w-[140px]"
+                        >
+                          {src}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
-                      Create Policy
+                      Used Space
                     </p>
-                    <p className="text-xs text-white font-mono mt-0.5">
-                      {policy}
-                    </p>
+                    {mounted && st?.used_space ? (
+                      <div className="mt-0.5">
+                        <p className="text-xs text-white font-mono">
+                          {st.used_space}
+                        </p>
+                        <div className="w-full bg-nfs-card rounded-full h-1.5 mt-1">
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              (st.used_percent || 0) > 90
+                                ? "bg-red-400"
+                                : (st.used_percent || 0) > 70
+                                  ? "bg-amber-400"
+                                  : "bg-emerald-400"
+                            }`}
+                            style={{ width: `${st.used_percent || 0}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-nfs-muted mt-0.5">
+                          {st.used_percent}%
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-nfs-muted mt-0.5">—</p>
+                    )}
                   </div>
-                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
-                      Min Free Space
+                      Free Space
                     </p>
-                    <p className="text-xs text-white font-mono mt-0.5">
-                      {minFree}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Sources */}
-                <div className="mt-2">
-                  <div className="flex flex-wrap gap-1">
-                    {sources.map((src, i) => (
-                      <span
-                        key={i}
-                        className="text-xs bg-nfs-input/50 text-nfs-text px-2 py-1 rounded font-mono"
-                      >
-                        {src}
-                      </span>
-                    ))}
+                    {mounted && st?.free_space ? (
+                      <p className="text-xs text-emerald-400 font-mono mt-0.5">
+                        {st.free_space}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-nfs-muted mt-0.5">—</p>
+                    )}
                   </div>
                 </div>
               </div>
