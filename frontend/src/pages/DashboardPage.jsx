@@ -205,7 +205,10 @@ export default function DashboardPage() {
       {/* Mount Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* NFS Mounts */}
-        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
+        <div
+          onClick={() => navigate("/nfs/client")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-nfs-primary/10">
               <HardDrive className="w-4 h-4 text-nfs-primary" />
@@ -257,7 +260,10 @@ export default function DashboardPage() {
         </div>
 
         {/* MergerFS */}
-        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
+        <div
+          onClick={() => navigate("/mergerfs")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-purple-500/10">
               <GitMerge className="w-4 h-4 text-purple-400" />
@@ -303,7 +309,10 @@ export default function DashboardPage() {
 
       {/* VPN & Kernel Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
+        <div
+          onClick={() => navigate("/vpn")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-emerald-500/10">
               <Shield className="w-4 h-4 text-emerald-400" />
@@ -343,7 +352,10 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
+        <div
+          onClick={() => navigate("/settings?tab=system")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-nfs-primary/10">
               <Cpu className="w-4 h-4 text-nfs-primary" />

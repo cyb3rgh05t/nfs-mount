@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
     procps \
     kmod \
+    openresolv \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable FUSE for all users

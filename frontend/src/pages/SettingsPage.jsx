@@ -48,6 +48,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
+import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
@@ -131,7 +132,12 @@ const tabs = [
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabParam = searchParams.get("tab");
+    const validTabs = tabs.map((t) => t.id);
+    return tabParam && validTabs.includes(tabParam) ? tabParam : "profile";
+  });
   const [configs, setConfigs] = useCachedState("settings-notifs", []);
   const [kernelParams, setKernelParams] = useCachedState("settings-kernel", []);
   const [dockerInfo, setDockerInfo] = useCachedState("settings-docker", null);
