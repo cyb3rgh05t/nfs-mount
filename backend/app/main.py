@@ -76,7 +76,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 # API routers
+# Health check endpoint (no auth, for Docker healthcheck)
+@app.get("/api/system/health", include_in_schema=False)
+async def health_check():
+    return {"status": "ok"}
+
+
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(nfs.router, prefix="/api/nfs", tags=["NFS"])
 app.include_router(mergerfs.router, prefix="/api/mergerfs", tags=["MergerFS"])

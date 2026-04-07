@@ -111,7 +111,11 @@ async def start_nfs_server() -> dict:
 
 async def get_active_exports() -> list[str]:
     """Get list of currently active NFS exports via exportfs -v."""
-    result = await _run(["exportfs", "-v"])
+    try:
+        result = await _run(["exportfs", "-v"])
+    except FileNotFoundError:
+        logger.warning("exportfs not found – nfs-kernel-server not installed?")
+        return []
     if result.returncode != 0:
         return []
     return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]

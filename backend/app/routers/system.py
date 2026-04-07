@@ -11,21 +11,6 @@ router = APIRouter(dependencies=[Depends(verify_api_key)])
 _start_time = time.time()
 
 
-@router.get("/health")
-async def health():
-    """Health check endpoint (no auth required for Docker healthcheck)."""
-    return {"status": "ok"}
-
-
-# Override the health endpoint without auth
-router.routes = [r for r in router.routes if r.path != "/health"]  # type: ignore
-
-
-@router.get("/health", include_in_schema=False)
-async def health_no_auth():
-    return {"status": "ok"}
-
-
 @router.get("/status")
 async def system_status():
     uptime = time.time() - _start_time
