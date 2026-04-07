@@ -308,12 +308,15 @@ export default function VPNPage() {
           {configs.map((cfg) => {
             const st = statuses[cfg.id];
             const active = st?.is_active || false;
+            const iface =
+              cfg.vpn_type === "wireguard" ? `wg${cfg.id}` : `ovpn${cfg.id}`;
 
             return (
               <div
                 key={cfg.id}
                 className="bg-nfs-card border border-nfs-border rounded-xl p-4 hover:border-nfs-muted transition-all"
               >
+                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div
@@ -330,10 +333,26 @@ export default function VPNPage() {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium text-white">
                           {cfg.name}
                         </p>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded-full border ${
+                            active
+                              ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                              : "bg-slate-500/15 text-slate-400 border-slate-500/30"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              active
+                                ? "bg-emerald-400 animate-pulse"
+                                : "bg-slate-400"
+                            }`}
+                          />
+                          {active ? "Connected" : "Disconnected"}
+                        </span>
                         <span
                           className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
                             cfg.vpn_type === "wireguard"
@@ -351,37 +370,10 @@ export default function VPNPage() {
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-xs ${
-                            active ? "text-emerald-400" : "text-nfs-muted"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              active
-                                ? "bg-emerald-400 animate-pulse"
-                                : "bg-nfs-muted"
-                            }`}
-                          />
-                          {active ? "Connected" : "Disconnected"}
-                        </span>
-                        {st?.endpoint && (
-                          <span className="text-xs text-nfs-muted">
-                            {st.endpoint}
-                          </span>
-                        )}
-                        {st?.transfer?.raw && (
-                          <span className="text-xs text-nfs-muted">
-                            {st.transfer.raw}
-                          </span>
-                        )}
-                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    {/* View Config */}
                     <button
                       onClick={() => setShowConfig(cfg)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
@@ -389,8 +381,6 @@ export default function VPNPage() {
                     >
                       <FileText className="w-4 h-4" />
                     </button>
-
-                    {/* Connect/Disconnect */}
                     {active ? (
                       <button
                         onClick={() => handleDisconnect(cfg.id)}
@@ -410,8 +400,6 @@ export default function VPNPage() {
                         <Play className="w-4 h-4" />
                       </button>
                     )}
-
-                    {/* Edit */}
                     <button
                       onClick={() => openEdit(cfg)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-primary/10 transition-colors"
@@ -419,8 +407,6 @@ export default function VPNPage() {
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
-
-                    {/* Delete */}
                     <button
                       onClick={() => handleDelete(cfg.id)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -428,6 +414,42 @@ export default function VPNPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
+                  </div>
+                </div>
+
+                {/* Mini info cards */}
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Interface
+                    </p>
+                    <p className="text-xs text-white font-mono mt-0.5">
+                      {iface}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Endpoint
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {st?.endpoint || "—"}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Transfer
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {st?.transfer?.raw || "—"}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Type
+                    </p>
+                    <p className="text-xs text-white mt-0.5">
+                      {cfg.vpn_type === "wireguard" ? "WireGuard" : "OpenVPN"}
+                    </p>
                   </div>
                 </div>
 

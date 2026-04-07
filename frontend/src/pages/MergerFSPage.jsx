@@ -263,11 +263,16 @@ export default function MergerFSPage() {
             const st = statuses[c.id];
             const mounted = st?.mounted || false;
             const sources = Array.isArray(c.sources) ? c.sources : [];
+            const policyMatch = c.options?.match(/category\.create=(\w+)/);
+            const policy = policyMatch ? policyMatch[1] : "—";
+            const minFreeMatch = c.options?.match(/minfreespace=([^\s,]+)/);
+            const minFree = minFreeMatch ? minFreeMatch[1] : "—";
             return (
               <div
                 key={c.id}
                 className="bg-nfs-card border border-nfs-border rounded-xl p-4 hover:border-nfs-muted transition-all"
               >
+                {/* Header */}
                 <div className="flex items-center gap-4">
                   <div
                     className={`w-3 h-3 rounded-full flex-shrink-0 ${
@@ -275,7 +280,7 @@ export default function MergerFSPage() {
                     }`}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-white">{c.name}</span>
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
@@ -295,9 +300,6 @@ export default function MergerFSPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-nfs-muted mt-0.5 font-mono">
-                      → {c.mount_point}
-                    </p>
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -335,11 +337,44 @@ export default function MergerFSPage() {
                   </div>
                 </div>
 
+                {/* Mini info cards */}
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Mount Point
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {c.mount_point}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Sources
+                    </p>
+                    <p className="text-xs text-white mt-0.5">
+                      {sources.length} path{sources.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Create Policy
+                    </p>
+                    <p className="text-xs text-white font-mono mt-0.5">
+                      {policy}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-bg/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Min Free Space
+                    </p>
+                    <p className="text-xs text-white font-mono mt-0.5">
+                      {minFree}
+                    </p>
+                  </div>
+                </div>
+
                 {/* Sources */}
-                <div className="mt-3 pl-7">
-                  <p className="text-[10px] font-semibold text-nfs-muted uppercase tracking-wider mb-1">
-                    Sources
-                  </p>
+                <div className="mt-2">
                   <div className="flex flex-wrap gap-1">
                     {sources.map((src, i) => (
                       <span
