@@ -1,4 +1,13 @@
 const API_BASE = "/api";
+const DEBUG = localStorage.getItem("debug") === "true";
+
+function log(level, ...args) {
+  if (!DEBUG && level === "debug") return;
+  const prefix = `[API ${new Date().toISOString()}]`;
+  if (level === "error") console.error(prefix, ...args);
+  else if (level === "warn") console.warn(prefix, ...args);
+  else console.log(prefix, ...args);
+}
 
 function getHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -14,6 +23,8 @@ function getHeaders() {
 }
 
 async function request(method, path, body) {
+  const start = performance.now();
+  log("debug", `${method} ${path}`, body !== undefined ? body : "");
   const opts = {
     method,
     headers: getHeaders(),
@@ -22,13 +33,21 @@ async function request(method, path, body) {
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(`${API_BASE}${path}`, opts);
+  const duration = Math.round(performance.now() - start);
   if (res.status === 401 && !path.startsWith("/auth/")) {
+    log("warn", `${method} ${path} -> 401 (${duration}ms) – token cleared`);
     localStorage.removeItem("token");
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    log(
+      "error",
+      `${method} ${path} -> ${res.status} (${duration}ms):`,
+      err.detail,
+    );
     throw new Error(err.detail || "Request failed");
   }
+  log("debug", `${method} ${path} -> ${res.status} (${duration}ms)`);
   return res.json();
 }
 

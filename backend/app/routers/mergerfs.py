@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -15,6 +16,8 @@ from ..schemas.mergerfs import (
 )
 from ..services import mergerfs_service
 from ..services.notification_service import send_alert
+
+logger = logging.getLogger("nfs-manager.router.mergerfs")
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -66,6 +69,9 @@ async def create_mergerfs_config(
     db.add(config)
     await db.commit()
     await db.refresh(config)
+    logger.info(
+        "MergerFS config created: %s (mount=%s)", config.name, config.mount_point
+    )
     return _to_response(config)
 
 
@@ -94,6 +100,7 @@ async def update_mergerfs_config(
 
     await db.commit()
     await db.refresh(config)
+    logger.info("MergerFS config updated: %s (id=%d)", config.name, config.id)
     return _to_response(config)
 
 
@@ -106,6 +113,7 @@ async def delete_mergerfs_config(config_id: int, db: AsyncSession = Depends(get_
         await mergerfs_service.unmount_mergerfs(config.mount_point)
     await db.delete(config)
     await db.commit()
+    logger.info("MergerFS config deleted: %s (id=%d)", config.name, config_id)
     return {"detail": "Deleted"}
 
 
@@ -114,10 +122,17 @@ async def mount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
     config = await db.get(MergerFSConfig, config_id)
     if not config:
         raise HTTPException(status_code=404, detail="MergerFS config not found")
+    logger.info("Mounting MergerFS: %s (id=%d)", config.name, config.id)
     result = await mergerfs_service.mount_mergerfs(config)
     if result["success"]:
+        logger.info("MergerFS mount successful: %s", config.name)
         await send_alert("SUCCESS", f"MergerFS **{config.name}** mounted successfully")
     else:
+        logger.error(
+            "MergerFS mount failed: %s – %s",
+            config.name,
+            result.get("error", "Unknown"),
+        )
         await send_alert(
             "ERROR",
             f"MergerFS **{config.name}** failed: {result.get('error', 'Unknown')}",
@@ -130,8 +145,10 @@ async def unmount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
     config = await db.get(MergerFSConfig, config_id)
     if not config:
         raise HTTPException(status_code=404, detail="MergerFS config not found")
+    logger.info("Unmounting MergerFS: %s (id=%d)", config.name, config.id)
     result = await mergerfs_service.unmount_mergerfs(config.mount_point)
     if result["success"]:
+        logger.info("MergerFS unmount successful: %s", config.name)
         await send_alert("INFO", f"MergerFS **{config.name}** unmounted")
     return result
 

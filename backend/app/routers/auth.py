@@ -22,7 +22,7 @@ from ..schemas.user import (
     PasswordChange,
 )
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.router.auth")
 
 router = APIRouter()
 
@@ -35,12 +35,15 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.hashed_password):
+        logger.warning("Failed login attempt for username: %s", data.username)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
+        logger.warning("Login attempt for disabled user: %s", data.username)
         raise HTTPException(status_code=403, detail="User disabled")
 
     token = create_access_token({"sub": str(user.id)})
+    logger.info("User logged in: %s (id=%d)", user.username, user.id)
     return TokenResponse(
         access_token=token,
         user=UserResponse.model_validate(user),
@@ -77,6 +80,9 @@ async def change_password(
 
     current_user.hashed_password = hash_password(data.new_password)
     await db.commit()
+    logger.info(
+        "Password changed for user: %s (id=%d)", current_user.username, current_user.id
+    )
     return {"detail": "Password changed"}
 
 
@@ -113,6 +119,13 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    logger.info(
+        "User created: %s (id=%d, admin=%s) by %s",
+        user.username,
+        user.id,
+        user.is_admin,
+        admin.username,
+    )
     return user
 
 
@@ -138,6 +151,9 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+    logger.info(
+        "User updated: %s (id=%d) by %s", user.username, user.id, admin.username
+    )
     return user
 
 
@@ -155,6 +171,9 @@ async def delete_user(
 
     await db.delete(user)
     await db.commit()
+    logger.info(
+        "User deleted: %s (id=%d) by %s", user.username, user_id, admin.username
+    )
     return {"detail": "User deleted"}
 
 

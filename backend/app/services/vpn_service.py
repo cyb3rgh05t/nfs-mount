@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.vpn_config import VPNConfig
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.vpn")
 
 WG_CONF_DIR = "/etc/wireguard"
 OVPN_CONF_DIR = "/etc/openvpn"

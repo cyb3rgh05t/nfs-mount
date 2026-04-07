@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.nfs_mount import NFSMount
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.nfs")
 
 
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:

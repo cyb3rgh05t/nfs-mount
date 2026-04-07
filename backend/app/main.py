@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select, func
 
 from .database import engine, Base, async_session
+from .logging_config import setup_logging
+from .middleware import RequestLoggingMiddleware
 from .routers import nfs, mergerfs, system, notifications, auth, vpn
 from .services.nfs_service import auto_mount_nfs
 from .services.mergerfs_service import auto_mount_mergerfs
@@ -16,6 +18,9 @@ from .services.notification_service import send_alert
 from .models.user import User
 from .auth import hash_password
 from .config import settings
+
+# Initialize logging before anything else
+setup_logging(level=settings.log_level)
 
 logger = logging.getLogger("nfs-manager")
 
@@ -75,6 +80,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
 
 # API routers

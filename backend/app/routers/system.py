@@ -1,3 +1,4 @@
+import logging
 import time
 
 from fastapi import APIRouter, Depends, Query
@@ -5,6 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from ..auth import verify_api_key
 from ..schemas.system import KernelTuning, SystemStats, VPNStatus
 from ..services import system_service
+
+logger = logging.getLogger("nfs-manager.router.system")
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -43,6 +46,7 @@ async def kernel_params():
 
 @router.post("/kernel-tuning")
 async def apply_kernel_tuning(data: KernelTuning):
+    logger.info("Applying kernel tuning: %d params", len(data.params))
     return await system_service.apply_kernel_tuning(
         [p.model_dump() for p in data.params]
     )

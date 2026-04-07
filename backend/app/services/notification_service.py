@@ -9,7 +9,7 @@ from ..database import async_session
 from ..models.notification import NotificationConfig
 from sqlalchemy import select
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.notification")
 
 
 @dataclass

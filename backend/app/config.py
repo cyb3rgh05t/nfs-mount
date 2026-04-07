@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:////data/nfs-manager.db"
     api_key: str = ""
+    log_level: str = "INFO"
     discord_webhook: str = ""
     telegram_token: str = ""
     telegram_chat_id: str = ""

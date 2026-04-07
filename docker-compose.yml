@@ -16,14 +16,13 @@ services:
       - "TELEGRAM_CHAT_ID="
       - "TELEGRAM_TOPIC_ID="
     restart: "unless-stopped"
+    network_mode: "host"
     privileged: true
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
     devices:
       - "/dev/fuse:/dev/fuse"
-    ports:
-      - "8080:8080"
     volumes:
       - "/opt/appdata/nfs-mount/data:/data"
       - "/mnt:/mnt:rshared"

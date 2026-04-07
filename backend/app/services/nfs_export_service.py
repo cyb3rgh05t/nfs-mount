@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.nfs_export import NFSExport
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.nfs_export")
 
 EXPORTS_FILE = "/etc/exports"
 MANAGED_BEGIN = "# --- NFS-Manager BEGIN ---"

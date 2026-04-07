@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
 from .database import get_db
+
+logger = logging.getLogger("nfs-manager.auth")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -45,6 +48,7 @@ async def get_current_user(
         result = await db.execute(select(User).where(User.is_admin == True).limit(1))
         user = result.scalar_one_or_none()
         if user:
+            logger.debug("Authenticated via API key as user: %s", user.username)
             return user
 
     # Try JWT token
@@ -64,11 +68,14 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token")
         user_id = int(sub)
     except (JWTError, ValueError):
+        logger.warning("Invalid JWT token presented")
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user = await db.get(User, user_id)
     if not user or not user.is_active:
+        logger.warning("JWT token for missing/disabled user id=%d", user_id)
         raise HTTPException(status_code=401, detail="User not found or disabled")
+    logger.debug("Authenticated via JWT: %s (id=%d)", user.username, user.id)
     return user
 
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.mergerfs_config import MergerFSConfig
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.mergerfs")
 
 
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -26,6 +26,10 @@ async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess
         return subprocess.CompletedProcess(
             cmd, returncode=-1, stdout="", stderr=f"Command timed out after {timeout}s"
         )
+
+
+def is_mounted(path: str) -> bool:
+    """Check if a path is a mountpoint."""
     try:
         result = subprocess.run(
             ["mountpoint", "-q", path], capture_output=True, timeout=5

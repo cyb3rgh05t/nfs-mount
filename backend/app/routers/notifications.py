@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,8 @@ from ..schemas.notification import (
     NotificationUpdate,
 )
 from ..services import notification_service
+
+logger = logging.getLogger("nfs-manager.router.notifications")
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -37,6 +41,7 @@ async def create_config(data: NotificationCreate, db: AsyncSession = Depends(get
     db.add(config)
     await db.commit()
     await db.refresh(config)
+    logger.info("Notification config created: type=%s (id=%d)", config.type, config.id)
     return config
 
 
@@ -51,6 +56,7 @@ async def update_config(
         setattr(config, key, value)
     await db.commit()
     await db.refresh(config)
+    logger.info("Notification config updated: type=%s (id=%d)", config.type, config.id)
     return config
 
 
@@ -61,6 +67,7 @@ async def delete_config(config_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Notification config not found")
     await db.delete(config)
     await db.commit()
+    logger.info("Notification config deleted: id=%d", config_id)
     return {"detail": "Deleted"}
 
 
@@ -87,4 +94,5 @@ async def test_notification(data: NotificationTest, db: AsyncSession = Depends(g
     else:
         raise HTTPException(status_code=400, detail="Notification config incomplete")
 
+    logger.info("Test notification sent via %s", config.type)
     return {"detail": "Test notification sent"}

@@ -5,7 +5,7 @@ import logging
 
 import psutil
 
-logger = logging.getLogger("nfs-manager")
+logger = logging.getLogger("nfs-manager.service.system")
 
 
 async def _run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess:
