@@ -74,8 +74,17 @@ else
     echo "[VPN] No WireGuard config found at /config/wg0.conf - skipping."
 fi
 
-# ── Ensure mount directories ──
-mkdir -p /mnt/downloads /mnt/unionfs
+# ── Clean stale mounts & ensure directories ──
+for mp in /mnt/downloads /mnt/unionfs; do
+    if mountpoint -q "$mp" 2>/dev/null; then
+        echo "[CLEANUP] Unmounting stale mount at $mp..."
+        fusermount -u "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null || true
+    elif [ -e "$mp" ] && ! stat "$mp" >/dev/null 2>&1; then
+        echo "[CLEANUP] Stale transport at $mp, force unmounting..."
+        umount -l "$mp" 2>/dev/null || true
+    fi
+    mkdir -p "$mp" 2>/dev/null || true
+done
 
 # ── Start Application ──
 echo "[APP] Starting NFS-MergerFS Manager on port 8080..."
