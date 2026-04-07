@@ -98,6 +98,108 @@ def _remove_config_file(config: VPNConfig):
         pass
 
 
+def _get_default_gateway():
+    """Get the default gateway IP and interface."""
+    try:
+        result = subprocess.run(
+            ["ip", "route", "show", "default"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # default via 192.168.1.1 dev eth0
+            parts = result.stdout.strip().split("\n")[0].split()
+            gw_ip = parts[2] if len(parts) > 2 else None
+            gw_dev = parts[4] if len(parts) > 4 else None
+            return gw_ip, gw_dev
+    except Exception:
+        pass
+    return None, None
+
+
+def _get_host_ips():
+    """Get all non-loopback IPv4 IPs on the host to protect from VPN routing."""
+    ips = set()
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                line = line.strip()
+                if line.startswith("inet "):
+                    ip = line.split()[1].split("/")[0]
+                    if not ip.startswith("127."):
+                        ips.add(ip)
+    except Exception:
+        pass
+    return ips
+
+
+def _has_full_tunnel(config_content: str) -> bool:
+    """Check if a VPN config routes all traffic (0.0.0.0/0)."""
+    return "0.0.0.0/0" in config_content or "redirect-gateway" in config_content
+
+
+def _add_route_protection(config: VPNConfig):
+    """Add policy routing rules to prevent lockout when VPN routes all traffic.
+
+    Uses 'ip rule from <ip> table main' so that all traffic originating
+    from any of the host's real IPs is routed through the real default
+    gateway instead of the VPN tunnel. This protects SSH and management
+    access for both public servers and NATted/private servers.
+    """
+    if not _has_full_tunnel(config.config_content):
+        return []
+
+    host_ips = _get_host_ips()
+    protected = []
+
+    for ip in host_ips:
+        try:
+            result = subprocess.run(
+                ["ip", "rule", "add", "from", ip, "table", "main", "priority", "10"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                logger.info(f"Route protection rule added: from {ip} table main")
+                protected.append(ip)
+            elif "RTNETLINK answers: File exists" in result.stderr:
+                logger.info(f"Rule for {ip} already exists, skipping")
+                protected.append(ip)
+            else:
+                logger.warning(f"Failed to add rule for {ip}: {result.stderr}")
+        except Exception as e:
+            logger.warning(f"Route protection error for {ip}: {e}")
+
+    return protected
+
+
+def _remove_route_protection(config: VPNConfig):
+    """Remove policy routing rules added for host IP protection."""
+    if not _has_full_tunnel(config.config_content):
+        return
+
+    host_ips = _get_host_ips()
+    for ip in host_ips:
+        try:
+            subprocess.run(
+                ["ip", "rule", "del", "from", ip, "table", "main", "priority", "10"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            logger.info(f"Route protection rule removed: {ip}")
+        except Exception:
+            pass
+
+
 async def connect_vpn(config: VPNConfig) -> dict:
     """Connect a VPN tunnel."""
     # Validate config content before writing to disk
@@ -109,6 +211,13 @@ async def connect_vpn(config: VPNConfig) -> dict:
 
     iface = _get_interface_name(config)
     _write_config_file(config)
+
+    # Protect host IPs from being routed through VPN (prevents lockout)
+    protected_ips = _add_route_protection(config)
+    if protected_ips:
+        logger.info(
+            f"Route protection active for {len(protected_ips)} IP(s) before starting {config.name}"
+        )
 
     if config.vpn_type == "wireguard":
         result = await _run(["wg-quick", "up", iface])
@@ -129,6 +238,8 @@ async def connect_vpn(config: VPNConfig) -> dict:
 
     if result.returncode != 0:
         logger.error(f"VPN connect failed ({config.vpn_type}): {result.stderr}")
+        # Clean up route protection on failure
+        _remove_route_protection(config)
         return {"success": False, "error": result.stderr.strip(), "name": config.name}
 
     logger.info(f"VPN connected: {config.name} ({config.vpn_type})")
@@ -138,6 +249,9 @@ async def connect_vpn(config: VPNConfig) -> dict:
 async def disconnect_vpn(config: VPNConfig) -> dict:
     """Disconnect a VPN tunnel."""
     iface = _get_interface_name(config)
+
+    # Remove route protection before disconnect (routes no longer needed after tunnel is down)
+    _remove_route_protection(config)
 
     if config.vpn_type == "wireguard":
         result = await _run(["wg-quick", "down", iface])
