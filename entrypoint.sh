@@ -49,4 +49,4 @@ mkdir -p /mnt/downloads /mnt/unionfs
 
 # ── Start Application ──
 echo "[APP] Starting NFS-MergerFS Manager on port 8080..."
-exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 4 --log-level info
+exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 1 --log-level info
