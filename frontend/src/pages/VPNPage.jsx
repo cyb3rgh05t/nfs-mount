@@ -16,6 +16,7 @@ import {
   WifiOff,
   Copy,
   FileText,
+  Save,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -534,8 +535,13 @@ export default function VPNPage() {
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all"
+              className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all flex items-center justify-center gap-2"
             >
+              {editing ? (
+                <Save className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               {editing ? "Save" : "Create"}
             </button>
           </form>

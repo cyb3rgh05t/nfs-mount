@@ -13,6 +13,7 @@ import {
   Download,
   CheckCircle,
   XCircle,
+  Save,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -454,8 +455,13 @@ function MountsTab() {
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
+              {editing ? (
+                <Save className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               {editing ? "Save" : "Create"}
             </button>
           </div>
@@ -830,8 +836,13 @@ function ExportsTab() {
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
+              {editing ? (
+                <Save className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               {editing ? "Save" : "Create"}
             </button>
           </div>

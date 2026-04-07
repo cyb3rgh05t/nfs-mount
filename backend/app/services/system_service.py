@@ -244,7 +244,7 @@ def get_docker_info() -> dict:
         "/run/.containerenv"
     )
 
-    # Docker version
+    # Docker version — try docker CLI, fallback to Docker API via socket
     try:
         result = subprocess.run(
             ["docker", "--version"], capture_output=True, text=True, timeout=5
@@ -252,7 +252,31 @@ def get_docker_info() -> dict:
         if result.returncode == 0:
             info["docker_version"] = result.stdout.strip()
     except Exception:
-        pass
+        # Fallback: read via Docker socket if mounted
+        try:
+            import urllib.request
+            import json as _json
+
+            req = urllib.request.Request("http://localhost/version")
+            opener = urllib.request.build_opener(urllib.request.HTTPHandler())
+            # Try Unix socket via curl
+            r = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "--unix-socket",
+                    "/var/run/docker.sock",
+                    "http://localhost/version",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if r.returncode == 0:
+                data = _json.loads(r.stdout)
+                info["docker_version"] = f"Docker {data.get('Version', 'N/A')}"
+        except Exception:
+            pass
 
     # OS info
     try:
@@ -263,7 +287,8 @@ def get_docker_info() -> dict:
     except Exception:
         pass
 
-    # Container ID from cgroup
+    # Container ID — try multiple methods
+    # Method 1: /proc/self/cgroup (cgroup v1)
     try:
         with open("/proc/self/cgroup", "r") as f:
             for line in f:
@@ -277,17 +302,58 @@ def get_docker_info() -> dict:
     except Exception:
         pass
 
-    # Container hostname (usually the short container ID)
+    # Method 2: /proc/self/mountinfo (works with cgroup v2)
+    if info["container_id"] == "N/A":
+        try:
+            with open("/proc/self/mountinfo", "r") as f:
+                for line in f:
+                    if "/docker/containers/" in line:
+                        idx = line.index("/docker/containers/") + len(
+                            "/docker/containers/"
+                        )
+                        cid = line[idx : idx + 12]
+                        if len(cid) == 12:
+                            info["container_id"] = cid
+                        break
+        except Exception:
+            pass
+
+    # Method 3: HOSTNAME env (Docker sets it to short container ID)
     if info["container_id"] == "N/A":
         try:
             hostname = os.environ.get("HOSTNAME", "")
-            if hostname and len(hostname) >= 12:
+            if hostname:
                 info["container_id"] = hostname[:12]
         except Exception:
             pass
 
-    # Image from env (set in Dockerfile via ENV)
+    # Image from env (set in Dockerfile via ENV or docker-compose)
     info["image"] = os.environ.get("DOCKER_IMAGE", "N/A")
+
+    # Fallback: try Docker socket for image name
+    if info["image"] == "N/A" and info["container_id"] != "N/A":
+        try:
+            r = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "--unix-socket",
+                    "/var/run/docker.sock",
+                    f"http://localhost/containers/{info['container_id']}/json",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if r.returncode == 0:
+                import json as _json
+
+                data = _json.loads(r.stdout)
+                img = data.get("Config", {}).get("Image", "")
+                if img:
+                    info["image"] = img
+        except Exception:
+            pass
 
     return info
 
@@ -443,9 +509,12 @@ async def apply_rps_xps(settings: dict, db: AsyncSession | None = None) -> dict:
 
     # Apply XPS
     xps_mask = settings.get("xps_cpus")
-    if xps_mask:
-        xps_files = glob.glob(f"/sys/class/net/{iface}/queues/tx-*/xps_cpus")
-        for path in xps_files:
+    if xps_mask and xps_mask != "N/A":
+        tx_dirs = glob.glob(f"/sys/class/net/{iface}/queues/tx-*")
+        for tx_dir in tx_dirs:
+            path = os.path.join(tx_dir, "xps_cpus")
+            if not os.path.exists(path):
+                continue
             try:
                 with open(path, "w") as f:
                     f.write(xps_mask)

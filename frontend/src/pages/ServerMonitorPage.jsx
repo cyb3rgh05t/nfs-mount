@@ -17,13 +17,10 @@ import {
   Database,
   CheckCircle,
   AlertCircle,
-  KeyRound,
-  Upload,
-  Download,
-  ChevronDown,
   Shield,
   Layers,
   GitMerge,
+  Save,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -126,9 +123,7 @@ export default function ServerMonitorPage() {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [testing, setTesting] = useState(null);
-  const [keysOpen, setKeysOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef(null);
+  const [activeServer, setActiveServer] = useState(null);
   const intervalRef = useRef(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -167,60 +162,6 @@ export default function ServerMonitorPage() {
       setSSHKeys(data);
     } catch {
       // silently fail
-    }
-  };
-
-  const handleUploadKey = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      await api.uploadSSHKey(file);
-      toast.success(`SSH key "${file.name}" uploaded`);
-      await fetchSSHKeys();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const handleDownloadKey = async (name) => {
-    try {
-      const url = api.downloadSSHKey(name);
-      const headers = {};
-      const token = localStorage.getItem("token");
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-      const apiKey = localStorage.getItem("apiKey");
-      if (apiKey) headers["X-API-Key"] = apiKey;
-      const res = await fetch(url, { headers });
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleDeleteKey = async (name) => {
-    const ok = await confirm({
-      title: "Delete SSH Key",
-      message: `Delete key "${name}"? This cannot be undone.`,
-      confirmText: "Delete",
-      type: "danger",
-    });
-    if (!ok) return;
-    try {
-      await api.deleteSSHKey(name);
-      toast.success(`Key "${name}" deleted`);
-      await fetchSSHKeys();
-    } catch (err) {
-      toast.error(err.message);
     }
   };
 
@@ -368,6 +309,11 @@ export default function ServerMonitorPage() {
           onClick={handleSave}
           className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
         >
+          {modal === "create" ? (
+            <Plus className="w-4 h-4" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
           {modal === "create" ? "Add Server" : "Save Changes"}
         </button>
       </div>
@@ -415,93 +361,6 @@ export default function ServerMonitorPage() {
         .
       </InfoBox>
 
-      {/* SSH Keys Section */}
-      <div className="bg-nfs-card border border-nfs-border rounded-xl mb-6 overflow-hidden">
-        <button
-          onClick={() => setKeysOpen(!keysOpen)}
-          className="flex items-center gap-3 w-full p-4 text-left hover:bg-nfs-input/30 transition-colors"
-        >
-          <div className="p-2 rounded-lg bg-nfs-primary/10">
-            <KeyRound className="w-4 h-4 text-nfs-primary" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-white">SSH Keys</h3>
-            <p className="text-xs text-nfs-muted">
-              {sshKeys.length} key{sshKeys.length !== 1 ? "s" : ""} in
-              /config/ssh/
-            </p>
-          </div>
-          <ChevronDown
-            className={`w-4 h-4 text-nfs-muted transition-transform ${keysOpen ? "rotate-180" : ""}`}
-          />
-        </button>
-        {keysOpen && (
-          <div className="border-t border-nfs-border p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                onChange={handleUploadKey}
-                className="hidden"
-                accept=".pem,.key,.pub,.ppk,*"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-nfs-input border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-xs font-medium transition-all"
-              >
-                {uploading ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-nfs-primary" />
-                ) : (
-                  <Upload className="w-3.5 h-3.5 text-nfs-primary" />
-                )}
-                Upload Key
-              </button>
-            </div>
-            {sshKeys.length === 0 ? (
-              <InfoBox type="warning">
-                No SSH keys found. Upload a key to get started.
-              </InfoBox>
-            ) : (
-              <div className="space-y-1.5">
-                {sshKeys.map((k) => (
-                  <div
-                    key={k.name}
-                    className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-3 py-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <KeyRound className="w-3.5 h-3.5 text-nfs-muted flex-shrink-0" />
-                      <span className="text-sm text-white font-mono truncate">
-                        {k.name}
-                      </span>
-                      <span className="text-[10px] text-nfs-muted flex-shrink-0">
-                        {k.size}B · {k.permissions}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => handleDownloadKey(k.name)}
-                        className="p-1.5 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
-                        title="Download"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteKey(k.name)}
-                        className="p-1.5 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {loading && servers.length === 0 ? (
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-2 border-nfs-primary/30 border-t-nfs-primary rounded-full animate-spin" />
@@ -519,358 +378,403 @@ export default function ServerMonitorPage() {
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {servers.map((s) => {
-            const m = metrics[s.id];
-            const online = m?.online ?? false;
-            return (
-              <div
-                key={s.id}
-                className="bg-nfs-card border border-nfs-border rounded-xl overflow-hidden"
+        <>
+          {servers.length > 1 && (
+            <div className="bg-nfs-card border border-nfs-border rounded-xl p-2 mb-6 flex items-center gap-2 overflow-x-auto">
+              <button
+                onClick={() => setActiveServer(null)}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all whitespace-nowrap ${
+                  activeServer === null
+                    ? "bg-nfs-primary text-black"
+                    : "text-nfs-muted hover:text-white hover:bg-nfs-input/50"
+                }`}
               >
-                {/* Server Header */}
-                <div className="flex items-center justify-between p-4 border-b border-nfs-border">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`p-2 rounded-lg ${online ? "bg-emerald-500/10" : "bg-red-500/10"}`}
-                    >
-                      {online ? (
-                        <Wifi className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <WifiOff className="w-4 h-4 text-red-400" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-white">{s.name}</h3>
-                      <p className="text-xs text-nfs-muted">
-                        {s.host}:{s.port} · {s.username}
-                      </p>
-                    </div>
-                    {!s.enabled && (
-                      <span className="px-2 py-0.5 bg-nfs-input text-nfs-muted text-[10px] font-bold uppercase rounded">
-                        Disabled
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => handleTest(s)}
-                      disabled={testing === s.id}
-                      className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
-                      title="Test Connection"
-                    >
-                      {testing === s.id ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Activity className="w-4 h-4" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => openEdit(s)}
-                      className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
-                      title="Edit"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(s)}
-                      className="p-2 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Metrics */}
-                {online ? (
-                  <div className="p-4">
-                    {/* Top row: hostname + uptime */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-nfs-muted">
-                        <Server className="w-3 h-3 inline mr-1" />
-                        {m.hostname}
-                      </span>
-                      {m.uptime_human && (
-                        <span className="text-xs text-nfs-muted">
-                          <Clock className="w-3 h-3 inline mr-1" />
-                          Uptime: {m.uptime_human}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* CPU + Memory bars */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                      <ProgressBar
-                        value={m.cpu_usage}
-                        label={`CPU (${m.cpu_cores || "?"} cores)`}
-                      />
-                      <ProgressBar
-                        value={m.mem_usage_pct}
-                        label={`RAM (${m.mem_used_mb?.toFixed(0) || "?"}MB / ${m.mem_total_mb?.toFixed(0) || "?"}MB)`}
-                      />
-                    </div>
-
-                    {/* Metric cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <MetricCard
-                        icon={Cpu}
-                        label="Load (1/5/15)"
-                        value={
-                          m.load_1 !== null
-                            ? `${m.load_1} / ${m.load_5} / ${m.load_15}`
-                            : null
-                        }
-                      />
-                      <MetricCard
-                        icon={Activity}
-                        label="Network RX / TX"
-                        value={
-                          m.net_rx_bytes !== null
-                            ? `${formatBytes(m.net_rx_bytes)} / ${formatBytes(m.net_tx_bytes)}`
-                            : null
-                        }
-                        color="text-blue-400"
-                      />
-                      {m.arc_size_mb !== null && (
-                        <MetricCard
-                          icon={Database}
-                          label="ZFS ARC"
-                          value={`${m.arc_size_mb} MB`}
-                          sub={
-                            m.arc_hit_pct !== null
-                              ? `Hit Rate: ${m.arc_hit_pct}%`
-                              : null
-                          }
-                          color="text-purple-400"
-                        />
-                      )}
-                      {m.disks && m.disks.length > 0 && (
-                        <MetricCard
-                          icon={HardDrive}
-                          label={`Disks (${m.disks.length})`}
-                          value={m.disks[0]?.usage_pct || "—"}
-                          sub={m.disks[0]?.mount}
-                          color="text-amber-400"
-                        />
-                      )}
-                    </div>
-
-                    {/* Disk details */}
-                    {m.disks && m.disks.length > 1 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-xs text-nfs-muted font-medium">
-                          All Disks
-                        </p>
-                        {m.disks.map((d, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between text-xs bg-nfs-input/50 rounded-lg px-3 py-1.5"
-                          >
-                            <span className="text-nfs-text font-mono">
-                              {d.mount}
-                            </span>
-                            <span className="text-nfs-muted">
-                              {d.used} / {d.total} ({d.usage_pct})
-                            </span>
-                          </div>
-                        ))}
+                <Server className="w-4 h-4" />
+                All Servers
+              </button>
+              {servers.map((s) => {
+                const m = metrics[s.id];
+                const online = m?.online ?? false;
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveServer(s.id)}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all whitespace-nowrap ${
+                      activeServer === s.id
+                        ? "bg-nfs-primary text-black"
+                        : "text-nfs-muted hover:text-white hover:bg-nfs-input/50"
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${online ? "bg-emerald-400" : "bg-red-400"}`}
+                    />
+                    {s.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="space-y-4">
+            {servers
+              .filter((s) => activeServer === null || s.id === activeServer)
+              .map((s) => {
+                const m = metrics[s.id];
+                const online = m?.online ?? false;
+                return (
+                  <div
+                    key={s.id}
+                    className="bg-nfs-card border border-nfs-border rounded-xl overflow-hidden"
+                  >
+                    {/* Server Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-nfs-border">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-2 rounded-lg ${online ? "bg-emerald-500/10" : "bg-red-500/10"}`}
+                        >
+                          {online ? (
+                            <Wifi className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <WifiOff className="w-4 h-4 text-red-400" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-white">{s.name}</h3>
+                          <p className="text-xs text-nfs-muted">
+                            {s.host}:{s.port} · {s.username}
+                          </p>
+                        </div>
+                        {!s.enabled && (
+                          <span className="px-2 py-0.5 bg-nfs-input text-nfs-muted text-[10px] font-bold uppercase rounded">
+                            Disabled
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleTest(s)}
+                          disabled={testing === s.id}
+                          className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
+                          title="Test Connection"
+                        >
+                          {testing === s.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Activity className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => openEdit(s)}
+                          className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
+                          title="Edit"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(s)}
+                          className="p-2 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
 
-                    {/* ZFS Pools */}
-                    {m.zfs_pools && m.zfs_pools.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
-                          <Database className="w-3 h-3" /> ZFS Pools
-                        </p>
-                        {m.zfs_pools.map((pool, i) => (
-                          <div
-                            key={i}
-                            className="bg-nfs-input/50 rounded-lg px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white font-semibold">
-                                  {pool.name}
+                    {/* Metrics */}
+                    {online ? (
+                      <div className="p-4">
+                        {/* Top row: hostname + uptime */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs text-nfs-muted">
+                            <Server className="w-3 h-3 inline mr-1" />
+                            {m.hostname}
+                          </span>
+                          {m.uptime_human && (
+                            <span className="text-xs text-nfs-muted">
+                              <Clock className="w-3 h-3 inline mr-1" />
+                              Uptime: {m.uptime_human}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* CPU + Memory bars */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                          <ProgressBar
+                            value={m.cpu_usage}
+                            label={`CPU (${m.cpu_cores || "?"} cores)`}
+                          />
+                          <ProgressBar
+                            value={m.mem_usage_pct}
+                            label={`RAM (${m.mem_used_mb?.toFixed(0) || "?"}MB / ${m.mem_total_mb?.toFixed(0) || "?"}MB)`}
+                          />
+                        </div>
+
+                        {/* Metric cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <MetricCard
+                            icon={Cpu}
+                            label="Load (1/5/15)"
+                            value={
+                              m.load_1 !== null
+                                ? `${m.load_1} / ${m.load_5} / ${m.load_15}`
+                                : null
+                            }
+                          />
+                          <MetricCard
+                            icon={Activity}
+                            label="Network RX / TX"
+                            value={
+                              m.net_rx_bytes !== null
+                                ? `${formatBytes(m.net_rx_bytes)} / ${formatBytes(m.net_tx_bytes)}`
+                                : null
+                            }
+                            color="text-blue-400"
+                          />
+                          {m.arc_size_mb !== null && (
+                            <MetricCard
+                              icon={Database}
+                              label="ZFS ARC"
+                              value={`${m.arc_size_mb} MB`}
+                              sub={
+                                m.arc_hit_pct !== null
+                                  ? `Hit Rate: ${m.arc_hit_pct}%`
+                                  : null
+                              }
+                              color="text-purple-400"
+                            />
+                          )}
+                          {m.disks && m.disks.length > 0 && (
+                            <MetricCard
+                              icon={HardDrive}
+                              label={`Disks (${m.disks.length})`}
+                              value={m.disks[0]?.usage_pct || "—"}
+                              sub={m.disks[0]?.mount}
+                              color="text-amber-400"
+                            />
+                          )}
+                        </div>
+
+                        {/* Disk details */}
+                        {m.disks && m.disks.length > 1 && (
+                          <div className="mt-3 space-y-1.5">
+                            <p className="text-xs text-nfs-muted font-medium">
+                              All Disks
+                            </p>
+                            {m.disks.map((d, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center justify-between text-xs bg-nfs-input/50 rounded-lg px-3 py-1.5"
+                              >
+                                <span className="text-nfs-text font-mono">
+                                  {d.mount}
                                 </span>
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                    pool.health === "ONLINE"
-                                      ? "bg-emerald-500/15 text-emerald-400"
-                                      : pool.health === "DEGRADED"
-                                        ? "bg-amber-500/15 text-amber-400"
-                                        : "bg-red-500/15 text-red-400"
-                                  }`}
-                                >
-                                  {pool.health}
+                                <span className="text-nfs-muted">
+                                  {d.used} / {d.total} ({d.usage_pct})
                                 </span>
                               </div>
-                              <span className="text-nfs-muted">
-                                {pool.allocated} / {pool.size} (
-                                {pool.capacity_pct}%)
-                              </span>
-                            </div>
-                            {/* Pool disks */}
-                            {m.zfs_pool_disks &&
-                              m.zfs_pool_disks[pool.name] && (
-                                <div className="mt-1.5 flex flex-wrap gap-1">
-                                  {m.zfs_pool_disks[pool.name].map((d, j) => (
+                            ))}
+                          </div>
+                        )}
+
+                        {/* ZFS Pools */}
+                        {m.zfs_pools && m.zfs_pools.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
+                              <Database className="w-3 h-3" /> ZFS Pools
+                            </p>
+                            {m.zfs_pools.map((pool, i) => (
+                              <div
+                                key={i}
+                                className="bg-nfs-input/50 rounded-lg px-3 py-2"
+                              >
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-white font-semibold">
+                                      {pool.name}
+                                    </span>
                                     <span
-                                      key={j}
-                                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                                        d.state === "online"
-                                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                          : d.state === "degraded"
-                                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                        pool.health === "ONLINE"
+                                          ? "bg-emerald-500/15 text-emerald-400"
+                                          : pool.health === "DEGRADED"
+                                            ? "bg-amber-500/15 text-amber-400"
+                                            : "bg-red-500/15 text-red-400"
                                       }`}
                                     >
-                                      <span
-                                        className={`w-1 h-1 rounded-full ${
-                                          d.state === "online"
-                                            ? "bg-emerald-400"
-                                            : d.state === "degraded"
-                                              ? "bg-amber-400"
-                                              : "bg-red-400"
-                                        }`}
-                                      />
-                                      {d.name}
+                                      {pool.health}
                                     </span>
-                                  ))}
-                                </div>
-                              )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* RAID Arrays */}
-                    {m.raid_arrays && m.raid_arrays.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
-                          <Shield className="w-3 h-3" /> RAID Arrays
-                        </p>
-                        {m.raid_arrays.map((raid, i) => (
-                          <div
-                            key={i}
-                            className="bg-nfs-input/50 rounded-lg px-3 py-2"
-                          >
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-white font-semibold">
-                                  {raid.device}
-                                </span>
-                                <span className="text-nfs-muted uppercase">
-                                  {raid.level}
-                                </span>
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                    raid.health === "healthy"
-                                      ? "bg-emerald-500/15 text-emerald-400"
-                                      : raid.health === "recovering"
-                                        ? "bg-amber-500/15 text-amber-400"
-                                        : "bg-red-500/15 text-red-400"
-                                  }`}
-                                >
-                                  {raid.health || raid.status}
-                                </span>
-                              </div>
-                              <span className="text-nfs-muted">
-                                {raid.active_disks !== undefined
-                                  ? `${raid.active_disks}/${raid.total_disks} active`
-                                  : ""}
-                                {raid.size_gb ? ` · ${raid.size_gb} GB` : ""}
-                              </span>
-                            </div>
-                            {raid.recovery_pct !== undefined && (
-                              <div className="mt-1.5">
-                                <div className="flex items-center justify-between text-[10px] text-amber-400 mb-0.5">
-                                  <span>Rebuilding...</span>
-                                  <span>{raid.recovery_pct}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-nfs-border rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-amber-400 rounded-full transition-all"
-                                    style={{ width: `${raid.recovery_pct}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                            {raid.disks && raid.disks.length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1">
-                                {raid.disks.map((d, j) => (
-                                  <span
-                                    key={j}
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
-                                      d.state === "active"
-                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                        : d.state === "spare"
-                                          ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                                          : "bg-red-500/10 text-red-400 border-red-500/20"
-                                    }`}
-                                  >
-                                    <span
-                                      className={`w-1 h-1 rounded-full ${
-                                        d.state === "active"
-                                          ? "bg-emerald-400"
-                                          : d.state === "spare"
-                                            ? "bg-blue-400"
-                                            : "bg-red-400"
-                                      }`}
-                                    />
-                                    {d.name}
+                                  </div>
+                                  <span className="text-nfs-muted">
+                                    {pool.allocated} / {pool.size} (
+                                    {pool.capacity_pct}%)
                                   </span>
-                                ))}
+                                </div>
+                                {/* Pool disks */}
+                                {m.zfs_pool_disks &&
+                                  m.zfs_pool_disks[pool.name] && (
+                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                      {m.zfs_pool_disks[pool.name].map(
+                                        (d, j) => (
+                                          <span
+                                            key={j}
+                                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                              d.state === "online"
+                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                                : d.state === "degraded"
+                                                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                                  : "bg-red-500/10 text-red-400 border-red-500/20"
+                                            }`}
+                                          >
+                                            <span
+                                              className={`w-1 h-1 rounded-full ${
+                                                d.state === "online"
+                                                  ? "bg-emerald-400"
+                                                  : d.state === "degraded"
+                                                    ? "bg-amber-400"
+                                                    : "bg-red-400"
+                                              }`}
+                                            />
+                                            {d.name}
+                                          </span>
+                                        ),
+                                      )}
+                                    </div>
+                                  )}
                               </div>
-                            )}
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )}
 
-                    {/* UnionFS / MergerFS Mounts */}
-                    {m.union_mounts && m.union_mounts.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
-                          <GitMerge className="w-3 h-3" /> Union Mounts
-                        </p>
-                        {m.union_mounts.map((u, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between text-xs bg-nfs-input/50 rounded-lg px-3 py-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-white font-mono">
-                                {u.mount}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-nfs-primary/15 text-nfs-primary border border-nfs-primary/20">
-                                {u.type}
-                              </span>
-                            </div>
-                            <span
-                              className="text-nfs-muted text-[10px] font-mono max-w-[50%] truncate"
-                              title={u.sources}
-                            >
-                              {u.sources}
-                            </span>
+                        {/* RAID Arrays */}
+                        {m.raid_arrays && m.raid_arrays.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
+                              <Shield className="w-3 h-3" /> RAID Arrays
+                            </p>
+                            {m.raid_arrays.map((raid, i) => (
+                              <div
+                                key={i}
+                                className="bg-nfs-input/50 rounded-lg px-3 py-2"
+                              >
+                                <div className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-white font-semibold">
+                                      {raid.device}
+                                    </span>
+                                    <span className="text-nfs-muted uppercase">
+                                      {raid.level}
+                                    </span>
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                        raid.health === "healthy"
+                                          ? "bg-emerald-500/15 text-emerald-400"
+                                          : raid.health === "recovering"
+                                            ? "bg-amber-500/15 text-amber-400"
+                                            : "bg-red-500/15 text-red-400"
+                                      }`}
+                                    >
+                                      {raid.health || raid.status}
+                                    </span>
+                                  </div>
+                                  <span className="text-nfs-muted">
+                                    {raid.active_disks !== undefined
+                                      ? `${raid.active_disks}/${raid.total_disks} active`
+                                      : ""}
+                                    {raid.size_gb
+                                      ? ` · ${raid.size_gb} GB`
+                                      : ""}
+                                  </span>
+                                </div>
+                                {raid.recovery_pct !== undefined && (
+                                  <div className="mt-1.5">
+                                    <div className="flex items-center justify-between text-[10px] text-amber-400 mb-0.5">
+                                      <span>Rebuilding...</span>
+                                      <span>{raid.recovery_pct}%</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-nfs-border rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-amber-400 rounded-full transition-all"
+                                        style={{
+                                          width: `${raid.recovery_pct}%`,
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                                {raid.disks && raid.disks.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {raid.disks.map((d, j) => (
+                                      <span
+                                        key={j}
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                          d.state === "active"
+                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                            : d.state === "spare"
+                                              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                              : "bg-red-500/10 text-red-400 border-red-500/20"
+                                        }`}
+                                      >
+                                        <span
+                                          className={`w-1 h-1 rounded-full ${
+                                            d.state === "active"
+                                              ? "bg-emerald-400"
+                                              : d.state === "spare"
+                                                ? "bg-blue-400"
+                                                : "bg-red-400"
+                                          }`}
+                                        />
+                                        {d.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
+
+                        {/* UnionFS / MergerFS Mounts */}
+                        {m.union_mounts && m.union_mounts.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            <p className="text-xs text-nfs-muted font-medium flex items-center gap-1.5">
+                              <GitMerge className="w-3 h-3" /> Union Mounts
+                            </p>
+                            {m.union_mounts.map((u, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center justify-between text-xs bg-nfs-input/50 rounded-lg px-3 py-2"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-mono">
+                                    {u.mount}
+                                  </span>
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-nfs-primary/15 text-nfs-primary border border-nfs-primary/20">
+                                    {u.type}
+                                  </span>
+                                </div>
+                                <span
+                                  className="text-nfs-muted text-[10px] font-mono max-w-[50%] truncate"
+                                  title={u.sources}
+                                >
+                                  {u.sources}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4">
+                        <div className="flex items-center gap-2 text-sm text-red-400">
+                          <AlertCircle className="w-4 h-4" />
+                          {m?.error || "Server offline or unreachable"}
+                        </div>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 text-sm text-red-400">
-                      <AlertCircle className="w-4 h-4" />
-                      {m?.error || "Server offline or unreachable"}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+          </div>
+        </>
       )}
 
       {/* Create/Edit Modal */}

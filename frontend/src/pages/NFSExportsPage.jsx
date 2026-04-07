@@ -11,6 +11,7 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Save,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -434,8 +435,13 @@ export default function NFSExportsPage() {
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
             >
+              {editing ? (
+                <Save className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               {editing ? "Save" : "Create"}
             </button>
           </div>

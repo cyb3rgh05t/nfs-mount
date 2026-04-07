@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Settings,
   Bell,
@@ -41,6 +41,9 @@ import {
   RefreshCw,
   Zap,
   Network,
+  KeyRound,
+  Upload,
+  Download,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -120,6 +123,7 @@ const tabs = [
   { id: "security", label: "Security", icon: Key },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "system", label: "System", icon: Wrench },
+  { id: "sshkeys", label: "SSH Keys", icon: KeyRound },
   { id: "howto", label: "How To", icon: BookOpen },
   { id: "about", label: "About", icon: Info },
 ];
@@ -133,6 +137,9 @@ export default function SettingsPage() {
   const [dockerInfo, setDockerInfo] = useCachedState("settings-docker", null);
   const [rpsXps, setRpsXps] = useCachedState("settings-rpsxps", null);
   const [apiKeys, setApiKeys] = useCachedState("settings-apikeys", []);
+  const [sshKeys, setSSHKeys] = useCachedState("settings-sshkeys", []);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
   const [refreshing, setRefreshing] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState(null);
@@ -211,7 +218,72 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchData();
+    fetchSSHKeys();
   }, []);
+
+  // SSH Key handlers
+  const fetchSSHKeys = async () => {
+    try {
+      const data = await api.getSSHKeys();
+      setSSHKeys(data);
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleUploadKey = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      await api.uploadSSHKey(file);
+      toast.success(`SSH key "${file.name}" uploaded`);
+      await fetchSSHKeys();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDownloadKey = async (name) => {
+    try {
+      const url = api.downloadSSHKey(name);
+      const headers = {};
+      const token = localStorage.getItem("token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const apiKey = localStorage.getItem("apiKey");
+      if (apiKey) headers["X-API-Key"] = apiKey;
+      const res = await fetch(url, { headers });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDeleteKey = async (name) => {
+    const ok = await confirmDlg({
+      title: "Delete SSH Key",
+      message: `Delete key "${name}"? This cannot be undone.`,
+      confirmText: "Delete",
+      type: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.deleteSSHKey(name);
+      toast.success(`Key "${name}" deleted`);
+      await fetchSSHKeys();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   const saveApiKey = async () => {
     if (!newKeyName.trim()) {
@@ -882,8 +954,13 @@ export default function SettingsPage() {
                   </label>
                   <button
                     type="submit"
-                    className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all"
+                    className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all flex items-center justify-center gap-2"
                   >
+                    {editingUser ? (
+                      <Save className="w-4 h-4" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
                     {editingUser ? "Save" : "Create"}
                   </button>
                 </form>
@@ -961,7 +1038,7 @@ export default function SettingsPage() {
                   onClick={saveApiKey}
                   className="px-4 py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-medium rounded-lg text-sm flex items-center gap-2 transition-all shrink-0"
                 >
-                  <Save className="w-4 h-4 text-nfs-primary" />
+                  <Plus className="w-4 h-4 text-nfs-primary" />
                   Create
                 </button>
               </div>
@@ -1356,6 +1433,94 @@ export default function SettingsPage() {
               <p className="text-sm text-nfs-muted">Loading Docker info...</p>
             )}
           </Section>
+        </>
+      )}
+
+      {/* SSH Keys Tab */}
+      {activeTab === "sshkeys" && (
+        <>
+          <Section
+            icon={KeyRound}
+            title="SSH Keys"
+            iconColor="bg-nfs-primary/10 text-nfs-primary"
+          >
+            <p className="text-sm text-nfs-muted mb-4">
+              Manage SSH keys used for server monitoring connections. Keys are
+              stored in <code className="text-nfs-primary">/config/ssh/</code>.
+            </p>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleUploadKey}
+                className="hidden"
+                accept=".pem,.key,.pub,.ppk,*"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+              >
+                {uploading ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-nfs-primary" />
+                ) : (
+                  <Upload className="w-4 h-4 text-nfs-primary" />
+                )}
+                Upload Key
+              </button>
+              <button
+                onClick={fetchSSHKeys}
+                className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+              >
+                <RefreshCw className="w-4 h-4 text-nfs-primary" />
+                Refresh
+              </button>
+            </div>
+            {sshKeys.length === 0 ? (
+              <InfoBox type="warning">
+                No SSH keys found. Upload a key to get started.
+              </InfoBox>
+            ) : (
+              <div className="space-y-2">
+                {sshKeys.map((k) => (
+                  <div
+                    key={k.name}
+                    className="flex items-center justify-between bg-nfs-input/50 border border-nfs-border rounded-lg px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <KeyRound className="w-4 h-4 text-nfs-muted flex-shrink-0" />
+                      <span className="text-sm text-white font-mono truncate">
+                        {k.name}
+                      </span>
+                      <span className="text-xs text-nfs-muted flex-shrink-0">
+                        {k.size}B · {k.permissions}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => handleDownloadKey(k.name)}
+                        className="p-1.5 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-input transition-colors"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteKey(k.name)}
+                        className="p-1.5 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+          <InfoBox type="warning">
+            Supported formats: PEM, OpenSSH, and PuTTY PPK (v2/v3). PPK files
+            are automatically converted to OpenSSH format on upload.
+          </InfoBox>
         </>
       )}
 

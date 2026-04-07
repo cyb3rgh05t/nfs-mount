@@ -49,6 +49,9 @@ RUN mkdir -p /data /config /var/log/nfs-manager
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# Set image label for runtime detection
+ENV DOCKER_IMAGE=ghcr.io/cyb3rgh05t/nfs-mount:latest
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

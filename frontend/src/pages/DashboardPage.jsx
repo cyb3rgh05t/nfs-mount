@@ -416,7 +416,7 @@ export default function DashboardPage() {
                           <>
                             <Badge active={true} label={`${rpsXps.cpu_count} CPUs`} />
                             <Badge active={!!rpsXps.interface} label={rpsXps.interface || "No Interface"} />
-                            <Badge active={rpsXps.mtu && parseInt(rpsXps.mtu) >= 9000} label={rpsXps.mtu ? `MTU ${rpsXps.mtu}` : "MTU Not Set"} />
+                            <Badge active={rpsXps.mtu && parseInt(rpsXps.mtu) >= 1500} label={rpsXps.mtu ? `MTU ${rpsXps.mtu}` : "MTU Not Set"} />
                           </>
                         )}
                       </div>
