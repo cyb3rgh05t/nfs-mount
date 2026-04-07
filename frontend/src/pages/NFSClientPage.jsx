@@ -296,73 +296,121 @@ export default function NFSClientPage() {
             return (
               <div
                 key={m.id}
-                className="bg-nfs-card border border-nfs-border rounded-xl p-4 flex items-center gap-4 hover:border-nfs-muted transition-all"
+                className="bg-nfs-card border border-nfs-border rounded-xl p-4 hover:border-nfs-muted transition-all"
               >
-                <div
-                  className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                    mounted ? "bg-emerald-400 animate-pulse" : "bg-nfs-muted"
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white">{m.name}</span>
-                    {!m.enabled && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
-                        Deaktiviert
-                      </span>
-                    )}
-                    {m.auto_mount && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
-                        Auto
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-nfs-muted truncate mt-0.5 font-mono">
-                    {m.server_ip}:{m.remote_path} → {m.local_path}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-nfs-muted">
+                <div className="flex items-center gap-4">
                   <div
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      st?.server_reachable ? "bg-emerald-400" : "bg-red-400"
+                    className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                      mounted ? "bg-emerald-400 animate-pulse" : "bg-nfs-muted"
                     }`}
                   />
-                  Server
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-white">{m.name}</span>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${
+                          mounted
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        {mounted ? "Mounted" : "Unmounted"}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                        NFSv{m.nfs_version}
+                      </span>
+                      {m.auto_mount && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
+                          Auto
+                        </span>
+                      )}
+                      {!m.enabled && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
+                          Disabled
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {mounted ? (
+                      <button
+                        onClick={() => handleUnmount(m.id)}
+                        disabled={loading === `unmount-${m.id}`}
+                        className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
+                        title="Unmount"
+                      >
+                        <Square className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleMount(m.id)}
+                        disabled={loading === `mount-${m.id}`}
+                        className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
+                        title="Mount"
+                      >
+                        <Play className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEdit(m)}
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
+                      title="Edit"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(m.id)}
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  {mounted ? (
-                    <button
-                      onClick={() => handleUnmount(m.id)}
-                      disabled={loading === `unmount-${m.id}`}
-                      className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
-                      title="Unmount"
-                    >
-                      <Square className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleMount(m.id)}
-                      disabled={loading === `mount-${m.id}`}
-                      className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
-                      title="Mount"
-                    >
-                      <Play className="w-4 h-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => openEdit(m)}
-                    className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
-                    title="Edit"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(m.id)}
-                    className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+
+                {/* Mini info cards */}
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Server
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {m.server_ip}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Remote Path
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {m.remote_path}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Local Path
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {m.local_path}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Server Status
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          st?.server_reachable ? "bg-emerald-400" : "bg-red-400"
+                        }`}
+                      />
+                      <p
+                        className={`text-xs ${st?.server_reachable ? "text-emerald-400" : "text-red-400"}`}
+                      >
+                        {st?.server_reachable ? "Reachable" : "Unreachable"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
