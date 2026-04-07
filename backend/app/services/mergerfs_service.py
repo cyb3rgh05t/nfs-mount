@@ -94,13 +94,14 @@ async def unmount_mergerfs(mount_point: str) -> dict:
     return {"success": True}
 
 
-def _format_size(size_bytes: int) -> str:
+def _format_size(size_bytes: int | float) -> str:
     """Format bytes to human-readable size."""
+    value = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if abs(size_bytes) < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} EB"
+        if abs(value) < 1024:
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} EB"
 
 
 async def get_mount_status(config: MergerFSConfig) -> dict:
