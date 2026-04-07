@@ -347,11 +347,11 @@ export default function MergerFSPage() {
                     <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
                       Sources
                     </p>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {sources.map((src, i) => (
                         <span
                           key={i}
-                          className="text-[10px] bg-nfs-card border border-nfs-border rounded px-1.5 py-0.5 font-mono text-nfs-text truncate max-w-[140px]"
+                          className="inline-flex items-center text-[10px] bg-blue-500/10 border border-blue-500/25 rounded-full px-2.5 py-0.5 font-mono text-blue-300 truncate max-w-[160px]"
                         >
                           {src}
                         </span>
@@ -364,9 +364,22 @@ export default function MergerFSPage() {
                     </p>
                     {mounted && st?.used_space ? (
                       <div className="mt-0.5">
-                        <p className="text-xs text-white font-mono">
-                          {st.used_space}
-                        </p>
+                        <div className="flex items-baseline justify-between">
+                          <p className="text-xs text-white font-mono">
+                            {st.used_space}
+                          </p>
+                          <p
+                            className={`text-[10px] font-medium ${
+                              (st.used_percent || 0) > 90
+                                ? "text-red-400"
+                                : (st.used_percent || 0) > 70
+                                  ? "text-amber-400"
+                                  : "text-emerald-400"
+                            }`}
+                          >
+                            {st.used_percent}%
+                          </p>
+                        </div>
                         <div className="w-full bg-nfs-card rounded-full h-1.5 mt-1">
                           <div
                             className={`h-1.5 rounded-full ${
@@ -379,9 +392,6 @@ export default function MergerFSPage() {
                             style={{ width: `${st.used_percent || 0}%` }}
                           />
                         </div>
-                        <p className="text-[10px] text-nfs-muted mt-0.5">
-                          {st.used_percent}%
-                        </p>
                       </div>
                     ) : (
                       <p className="text-xs text-nfs-muted mt-0.5">—</p>
