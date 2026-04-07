@@ -18,14 +18,14 @@ class UserCreate(BaseModel):
     @classmethod
     def username_valid(cls, v):
         if len(v) < 3:
-            raise ValueError("Username muss mindestens 3 Zeichen haben")
+            raise ValueError("Username must be at least 3 characters")
         return v.lower().strip()
 
     @field_validator("password")
     @classmethod
     def password_valid(cls, v):
         if len(v) < 4:
-            raise ValueError("Passwort muss mindestens 4 Zeichen haben")
+            raise ValueError("Password must be at least 4 characters")
         return v
 
 
@@ -62,5 +62,5 @@ class PasswordChange(BaseModel):
     @classmethod
     def password_valid(cls, v):
         if len(v) < 4:
-            raise ValueError("Passwort muss mindestens 4 Zeichen haben")
+            raise ValueError("Password must be at least 4 characters")
         return v

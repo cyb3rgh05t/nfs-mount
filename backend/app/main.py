@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
             1 for r in nfs_results + mergerfs_results + vpn_results if not r["success"]
         )
         if mounted > 0 or failed > 0:
-            msg = f"Auto-mount: **{mounted}** erfolgreich, **{failed}** fehlgeschlagen"
+            msg = f"Auto-mount: **{mounted}** successful, **{failed}** failed"
             status = "STARTUP" if failed == 0 else "ERROR"
             await send_alert(status, msg)
     except Exception as e:

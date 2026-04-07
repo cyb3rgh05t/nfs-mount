@@ -20,9 +20,9 @@ const links = [
   { to: "/nfs", label: "NFS", icon: HardDrive },
   { to: "/mergerfs", label: "MergerFS", icon: GitMerge },
   { to: "/vpn", label: "VPN Tunnel", icon: Shield },
-  { to: "/users", label: "Benutzer", icon: Users, adminOnly: true },
-  { to: "/settings", label: "Einstellungen", icon: Settings },
-  { to: "/docs", label: "Dokumentation", icon: BookOpen },
+  { to: "/users", label: "Users", icon: Users, adminOnly: true },
+  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/docs", label: "Documentation", icon: BookOpen },
 ];
 
 export default function Sidebar() {
@@ -89,7 +89,7 @@ export default function Sidebar() {
           className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors text-sm"
         >
           <LogOut className="w-4 h-4" />
-          <span>Abmelden</span>
+          <span>Logout</span>
         </button>
         <p className="text-xs text-nfs-muted text-center">v1.0.0</p>
       </div>

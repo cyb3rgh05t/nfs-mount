@@ -103,14 +103,14 @@ export default function SettingsPage() {
 
   const saveApiKey = () => {
     localStorage.setItem("apiKey", apiKey);
-    showSuccess("API Key gespeichert");
+    showSuccess("API key saved");
   };
 
   const saveProfile = async () => {
     try {
       const updated = await api.updateMe({ display_name: displayName });
       updateUser(updated);
-      showSuccess("Profil aktualisiert");
+      showSuccess("Profile updated");
     } catch (e) {
       setError(e.message);
     }
@@ -118,12 +118,12 @@ export default function SettingsPage() {
 
   const changePassword = async () => {
     if (!currentPassword || !newPassword) {
-      setError("Beide Passwortfelder ausfüllen");
+      setError("Both password fields are required");
       return;
     }
     try {
       await api.changePassword(currentPassword, newPassword);
-      showSuccess("Passwort geändert");
+      showSuccess("Password changed");
       setCurrentPassword("");
       setNewPassword("");
     } catch (e) {
@@ -139,7 +139,7 @@ export default function SettingsPage() {
       } else {
         await api.createNotification({ type: "discord", ...discordForm });
       }
-      showSuccess("Discord Konfiguration gespeichert");
+      showSuccess("Discord configuration saved");
       fetchData();
     } catch (e) {
       setError(e.message);
@@ -154,7 +154,7 @@ export default function SettingsPage() {
       } else {
         await api.createNotification({ type: "telegram", ...telegramForm });
       }
-      showSuccess("Telegram Konfiguration gespeichert");
+      showSuccess("Telegram configuration saved");
       fetchData();
     } catch (e) {
       setError(e.message);
@@ -163,8 +163,8 @@ export default function SettingsPage() {
 
   const testDiscord = async () => {
     try {
-      await api.testNotification("discord", "Test von NFS-MergerFS Manager");
-      showSuccess("Discord Test gesendet");
+      await api.testNotification("discord", "Test from NFS-MergerFS Manager");
+      showSuccess("Discord test sent");
     } catch (e) {
       setError(e.message);
     }
@@ -172,8 +172,8 @@ export default function SettingsPage() {
 
   const testTelegram = async () => {
     try {
-      await api.testNotification("telegram", "Test von NFS-MergerFS Manager");
-      showSuccess("Telegram Test gesendet");
+      await api.testNotification("telegram", "Test from NFS-MergerFS Manager");
+      showSuccess("Telegram test sent");
     } catch (e) {
       setError(e.message);
     }
@@ -185,7 +185,7 @@ export default function SettingsPage() {
         <div className="p-2 rounded-lg bg-nfs-primary/10">
           <Settings className="w-5 h-5 text-nfs-primary" />
         </div>
-        Einstellungen
+        Settings
       </h1>
 
       {error && (
@@ -212,13 +212,13 @@ export default function SettingsPage() {
       {/* Profile */}
       <Section
         icon={User}
-        title="Profil"
+        title="Profile"
         iconColor="bg-blue-500/10 text-blue-400"
       >
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-              Benutzername
+              Username
             </label>
             <input
               className={`${inputClass} opacity-60`}
@@ -228,13 +228,13 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-              Anzeigename
+              Display Name
             </label>
             <input
               className={inputClass}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Dein Anzeigename"
+              placeholder="Your display name"
             />
           </div>
           <button
@@ -242,7 +242,7 @@ export default function SettingsPage() {
             className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
           >
             <Save className="w-4 h-4" />
-            Profil speichern
+            Save Profile
           </button>
         </div>
       </Section>
@@ -250,13 +250,13 @@ export default function SettingsPage() {
       {/* Password Change */}
       <Section
         icon={Lock}
-        title="Passwort ändern"
+        title="Change Password"
         iconColor="bg-red-500/10 text-red-400"
       >
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-              Aktuelles Passwort
+              Current Password
             </label>
             <div className="relative">
               <input
@@ -281,7 +281,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-              Neues Passwort
+              New Password
             </label>
             <div className="relative">
               <input
@@ -309,7 +309,7 @@ export default function SettingsPage() {
             className="px-4 py-2 bg-nfs-card border border-red-500/50 text-red-400 hover:bg-red-500/10 hover:border-red-500 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
           >
             <Lock className="w-4 h-4" />
-            Passwort ändern
+            Change Password
           </button>
         </div>
       </Section>
@@ -321,8 +321,8 @@ export default function SettingsPage() {
         iconColor="bg-nfs-primary/10 text-nfs-primary"
       >
         <p className="text-xs text-nfs-muted mb-3 leading-relaxed">
-          Setze einen API Key um die REST API abzusichern. Der Key wird im
-          Browser gespeichert.
+          Set an API key to secure the REST API. The key is stored in the
+          browser.
         </p>
         <div className="flex gap-2">
           <input
@@ -330,14 +330,14 @@ export default function SettingsPage() {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="API Key eingeben..."
+            placeholder="Enter API key..."
           />
           <button
             onClick={saveApiKey}
             className="px-4 py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm flex items-center gap-2 transition-colors shrink-0"
           >
             <Save className="w-4 h-4" />
-            Speichern
+            Save
           </button>
         </div>
       </Section>
@@ -345,7 +345,7 @@ export default function SettingsPage() {
       {/* Discord */}
       <Section
         icon={MessageSquare}
-        title="Discord Benachrichtigungen"
+        title="Discord Notifications"
         iconColor="bg-indigo-500/10 text-indigo-400"
       >
         <div className="space-y-3">
@@ -357,7 +357,7 @@ export default function SettingsPage() {
                 setDiscordForm({ ...discordForm, enabled: e.target.checked })
               }
             />
-            Aktiviert
+            Enabled
           </label>
           <div>
             <label className="block text-sm font-medium text-nfs-muted mb-1.5">
@@ -378,7 +378,7 @@ export default function SettingsPage() {
               className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
             >
               <Save className="w-4 h-4" />
-              Speichern
+              Save
             </button>
             <button
               onClick={testDiscord}
@@ -394,7 +394,7 @@ export default function SettingsPage() {
       {/* Telegram */}
       <Section
         icon={Send}
-        title="Telegram Benachrichtigungen"
+        title="Telegram Notifications"
         iconColor="bg-blue-500/10 text-blue-400"
       >
         <div className="space-y-3">
@@ -406,7 +406,7 @@ export default function SettingsPage() {
                 setTelegramForm({ ...telegramForm, enabled: e.target.checked })
               }
             />
-            Aktiviert
+            Enabled
           </label>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -459,7 +459,7 @@ export default function SettingsPage() {
               className="px-4 py-2 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 hover:border-nfs-primary rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
             >
               <Save className="w-4 h-4" />
-              Speichern
+              Save
             </button>
             <button
               onClick={testTelegram}
@@ -479,8 +479,8 @@ export default function SettingsPage() {
         iconColor="bg-amber-500/10 text-amber-400"
       >
         <p className="text-xs text-nfs-muted mb-3 leading-relaxed">
-          Aktuelle Kernel-Parameter für NFS Streaming-Optimierung (300+
-          Streams).
+          Current kernel parameters for NFS streaming optimization (300+
+          streams).
         </p>
         {kernelParams.length > 0 ? (
           <div className="space-y-1">

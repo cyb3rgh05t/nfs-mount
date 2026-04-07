@@ -155,13 +155,11 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-lg font-semibold text-white">NFS Mounts</h2>
             <span className="ml-auto text-xs text-nfs-muted">
-              {status?.nfs_mounts_active || 0} aktiv
+              {status?.nfs_mounts_active || 0} active
             </span>
           </div>
           {nfsStatus.length === 0 ? (
-            <p className="text-nfs-muted text-sm">
-              Keine NFS Mounts konfiguriert
-            </p>
+            <p className="text-nfs-muted text-sm">No NFS mounts configured</p>
           ) : (
             <div className="space-y-2">
               {nfsStatus.map((m) => (
@@ -209,12 +207,12 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-lg font-semibold text-white">MergerFS</h2>
             <span className="ml-auto text-xs text-nfs-muted">
-              {status?.mergerfs_mounts_active || 0} aktiv
+              {status?.mergerfs_mounts_active || 0} active
             </span>
           </div>
           {mergerStatus.length === 0 ? (
             <p className="text-nfs-muted text-sm">
-              Keine MergerFS Configs konfiguriert
+              No MergerFS configs configured
             </p>
           ) : (
             <div className="space-y-2">
@@ -264,7 +262,7 @@ export default function DashboardPage() {
               }`}
             />
             <span className="text-sm text-nfs-text">
-              WireGuard: {status?.vpn_active ? "Verbunden" : "Nicht aktiv"}
+              WireGuard: {status?.vpn_active ? "Connected" : "Not active"}
             </span>
           </div>
         </div>
@@ -275,11 +273,11 @@ export default function DashboardPage() {
               <Cpu className="w-4 h-4 text-nfs-primary" />
             </div>
             <h2 className="text-lg font-semibold text-white">
-              Streaming Optimierung
+              Streaming Optimization
             </h2>
           </div>
           <p className="text-sm text-nfs-muted leading-relaxed">
-            Kernel-Tuning aktiv für 300+ gleichzeitige Streams. NFS nconnect=16,
+            Kernel tuning active for 300+ simultaneous streams. NFS nconnect=16,
             1MB R/W Buffer.
           </p>
         </div>

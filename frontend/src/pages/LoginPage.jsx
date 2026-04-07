@@ -17,7 +17,7 @@ export default function LoginPage() {
     try {
       await login(username, password);
     } catch (err) {
-      setError(err.message || "Login fehlgeschlagen");
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -37,10 +37,8 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="bg-nfs-card border border-nfs-border rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-1">Anmelden</h2>
-          <p className="text-sm text-nfs-muted mb-6">
-            Melde dich an um fortzufahren
-          </p>
+          <h2 className="text-lg font-semibold text-white mb-1">Sign In</h2>
+          <p className="text-sm text-nfs-muted mb-6">Sign in to continue</p>
 
           {error && (
             <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
@@ -52,7 +50,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-                Benutzername
+                Username
               </label>
               <input
                 type="text"
@@ -67,7 +65,7 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-                Passwort
+                Password
               </label>
               <div className="relative">
                 <input
@@ -103,7 +101,7 @@ export default function LoginPage() {
               ) : (
                 <LogIn className="w-4 h-4" />
               )}
-              {loading ? "Anmelden..." : "Anmelden"}
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
         </div>

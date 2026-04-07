@@ -132,7 +132,7 @@ function MountsTab() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("NFS Mount wirklich löschen?")) return;
+    if (!confirm("Delete this NFS mount?")) return;
     try {
       await api.deleteNFSMount(id);
       fetchData();
@@ -192,7 +192,7 @@ function MountsTab() {
             className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Neuer Mount
+            New Mount
           </button>
         </div>
       </div>
@@ -214,25 +214,25 @@ function MountsTab() {
         <div className="flex items-center gap-2 mb-2">
           <Zap className="w-4 h-4 text-nfs-primary" />
           <span className="text-sm font-medium text-nfs-primary">
-            Streaming-Optimiert
+            Streaming-Optimized
           </span>
         </div>
         <p className="text-xs text-nfs-muted leading-relaxed">
-          NFSv4.2 mit nconnect=16 (16 parallele TCP-Verbindungen), 1MB R/W
-          Buffer, Attribute-Caching (1h), nocto, noatime — optimiert für 300+
-          gleichzeitige Streams.
+          NFSv4.2 with nconnect=16 (16 parallel TCP connections), 1MB R/W
+          Buffer, Attribute-Caching (1h), nocto, noatime — optimized for 300+
+          simultaneous streams.
         </p>
       </div>
 
       {mounts.length === 0 ? (
         <div className="text-center py-16 text-nfs-muted">
           <Download className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>Keine NFS Mounts konfiguriert</p>
+          <p>No NFS mounts configured</p>
           <button
             onClick={openCreate}
             className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
           >
-            Jetzt erstellen →
+            Create one now →
           </button>
         </div>
       ) : (
@@ -299,14 +299,14 @@ function MountsTab() {
                   <button
                     onClick={() => openEdit(m)}
                     className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
-                    title="Bearbeiten"
+                    title="Edit"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(m.id)}
                     className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
-                    title="Löschen"
+                    title="Delete"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -319,7 +319,7 @@ function MountsTab() {
 
       {showForm && (
         <Modal
-          title={editing ? "NFS Mount bearbeiten" : "Neuer NFS Mount"}
+          title={editing ? "Edit NFS Mount" : "New NFS Mount"}
           onClose={() => setShowForm(false)}
         >
           <Field label="Name">
@@ -327,7 +327,7 @@ function MountsTab() {
               className={inputClass}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="z.B. Storage-1"
+              placeholder="e.g. Storage-1"
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -349,14 +349,14 @@ function MountsTab() {
                   setForm({ ...form, nfs_version: e.target.value })
                 }
               >
-                <option value="4.2">4.2 (empfohlen)</option>
+                <option value="4.2">4.2 (recommended)</option>
                 <option value="4.1">4.1</option>
                 <option value="4">4.0</option>
                 <option value="3">3</option>
               </select>
             </Field>
           </div>
-          <Field label="Remote Pfad">
+          <Field label="Remote Path">
             <input
               className={inputClass}
               value={form.remote_path}
@@ -366,7 +366,7 @@ function MountsTab() {
               placeholder="/mnt/raidpool/filesystem/"
             />
           </Field>
-          <Field label="Lokaler Mountpoint">
+          <Field label="Local Mountpoint">
             <input
               className={inputClass}
               value={form.local_path}
@@ -374,7 +374,7 @@ function MountsTab() {
               placeholder="/mnt/storage"
             />
           </Field>
-          <Field label="Mount Optionen">
+          <Field label="Mount Options">
             <textarea
               className={`${inputClass} h-20 font-mono text-xs`}
               value={form.options}
@@ -410,7 +410,7 @@ function MountsTab() {
                 }
                 className="rounded border-nfs-border"
               />
-              Aktiviert
+              Enabled
             </label>
           </div>
           <div className="flex justify-end gap-3">
@@ -418,13 +418,13 @@ function MountsTab() {
               onClick={() => setShowForm(false)}
               className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
             >
-              Abbrechen
+              Cancel
             </button>
             <button
               onClick={handleSave}
               className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
-              {editing ? "Speichern" : "Erstellen"}
+              {editing ? "Save" : "Create"}
             </button>
           </div>
         </Modal>
@@ -506,7 +506,7 @@ function ExportsTab() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("NFS Export wirklich löschen?")) return;
+    if (!confirm("Delete this NFS export?")) return;
     try {
       await api.deleteNFSExport(id);
       fetchData();
@@ -559,14 +559,14 @@ function ExportsTab() {
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
           >
             <Zap className="w-4 h-4" />
-            Alle anwenden
+            Apply All
           </button>
           <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Neuer Export
+            New Export
           </button>
         </div>
       </div>
@@ -592,21 +592,21 @@ function ExportsTab() {
           </span>
         </div>
         <p className="text-xs text-nfs-muted leading-relaxed">
-          Verzeichnisse per NFS freigeben. Exports werden in /etc/exports
-          geschrieben und mit exportfs angewendet. Erlaubte Hosts können IPs,
-          Subnetze (192.168.1.0/24) oder * (alle) sein.
+          Share directories via NFS. Exports are written to /etc/exports and
+          applied with exportfs. Allowed hosts can be IPs, subnets
+          (192.168.1.0/24) or * (all).
         </p>
       </div>
 
       {exports.length === 0 ? (
         <div className="text-center py-16 text-nfs-muted">
           <Upload className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>Keine NFS Exports konfiguriert</p>
+          <p>No NFS exports configured</p>
           <button
             onClick={openCreate}
             className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
           >
-            Jetzt erstellen →
+            Create one now →
           </button>
         </div>
       ) : (
@@ -629,7 +629,7 @@ function ExportsTab() {
                     <span className="font-semibold text-white">{exp.name}</span>
                     {!exp.enabled && (
                       <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
-                        Deaktiviert
+                        Disabled
                       </span>
                     )}
                     <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/30">
@@ -646,7 +646,7 @@ function ExportsTab() {
                   ) : (
                     <XCircle className="w-3.5 h-3.5 text-nfs-muted" />
                   )}
-                  {active ? "Aktiv" : "Inaktiv"}
+                  {active ? "Active" : "Inactive"}
                 </div>
                 <div className="flex items-center gap-1">
                   {active ? (
@@ -654,7 +654,7 @@ function ExportsTab() {
                       onClick={() => handleDisable(exp.id)}
                       disabled={loading === `disable-${exp.id}`}
                       className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
-                      title="Deaktivieren"
+                      title="Disable"
                     >
                       <Square className="w-4 h-4" />
                     </button>
@@ -663,7 +663,7 @@ function ExportsTab() {
                       onClick={() => handleEnable(exp.id)}
                       disabled={loading === `enable-${exp.id}`}
                       className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
-                      title="Aktivieren"
+                      title="Enable"
                     >
                       <Play className="w-4 h-4" />
                     </button>
@@ -671,14 +671,14 @@ function ExportsTab() {
                   <button
                     onClick={() => openEdit(exp)}
                     className="p-2 rounded-lg text-nfs-muted hover:bg-nfs-input hover:text-white transition-all active:scale-90"
-                    title="Bearbeiten"
+                    title="Edit"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(exp.id)}
                     className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
-                    title="Löschen"
+                    title="Delete"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -691,7 +691,7 @@ function ExportsTab() {
 
       {showForm && (
         <Modal
-          title={editing ? "NFS Export bearbeiten" : "Neuer NFS Export"}
+          title={editing ? "Edit NFS Export" : "New NFS Export"}
           onClose={() => setShowForm(false)}
         >
           <Field label="Name">
@@ -699,10 +699,10 @@ function ExportsTab() {
               className={inputClass}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="z.B. Media-Share"
+              placeholder="e.g. Media-Share"
             />
           </Field>
-          <Field label="Export Pfad">
+          <Field label="Export Path">
             <input
               className={inputClass}
               value={form.export_path}
@@ -713,14 +713,14 @@ function ExportsTab() {
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Erlaubte Hosts">
+            <Field label="Allowed Hosts">
               <input
                 className={inputClass}
                 value={form.allowed_hosts}
                 onChange={(e) =>
                   setForm({ ...form, allowed_hosts: e.target.value })
                 }
-                placeholder="* oder 192.168.1.0/24"
+                placeholder="* or 192.168.1.0/24"
               />
             </Field>
             <Field label="NFS Version">
@@ -731,14 +731,14 @@ function ExportsTab() {
                   setForm({ ...form, nfs_version: e.target.value })
                 }
               >
-                <option value="4.2">4.2 (empfohlen)</option>
+                <option value="4.2">4.2 (recommended)</option>
                 <option value="4.1">4.1</option>
                 <option value="4">4.0</option>
                 <option value="3">3</option>
               </select>
             </Field>
           </div>
-          <Field label="Export Optionen">
+          <Field label="Export Options">
             <textarea
               className={`${inputClass} h-20 font-mono text-xs`}
               value={form.options}
@@ -755,7 +755,7 @@ function ExportsTab() {
                 }
                 className="rounded border-nfs-border"
               />
-              Aktiviert
+              Enabled
             </label>
           </div>
           <div className="flex justify-end gap-3">
@@ -763,13 +763,13 @@ function ExportsTab() {
               onClick={() => setShowForm(false)}
               className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
             >
-              Abbrechen
+              Cancel
             </button>
             <button
               onClick={handleSave}
               className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
-              {editing ? "Speichern" : "Erstellen"}
+              {editing ? "Save" : "Create"}
             </button>
           </div>
         </Modal>

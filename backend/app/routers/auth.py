@@ -35,10 +35,10 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
-        raise HTTPException(status_code=403, detail="Benutzer deaktiviert")
+        raise HTTPException(status_code=403, detail="User disabled")
 
     token = create_access_token({"sub": str(user.id)})
     return TokenResponse(
@@ -73,11 +73,11 @@ async def change_password(
     db: AsyncSession = Depends(get_db),
 ):
     if not verify_password(data.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Aktuelles Passwort ist falsch")
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     current_user.hashed_password = hash_password(data.new_password)
     await db.commit()
-    return {"detail": "Passwort geändert"}
+    return {"detail": "Password changed"}
 
 
 # ── Admin: User Management ──
@@ -102,7 +102,7 @@ async def create_user(
         select(User).where(User.username == data.username.lower().strip())
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Benutzername bereits vergeben")
+        raise HTTPException(status_code=409, detail="Username already taken")
 
     user = User(
         username=data.username.lower().strip(),
@@ -125,7 +125,7 @@ async def update_user(
 ):
     user = await db.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if data.display_name is not None:
         user.display_name = data.display_name
@@ -149,15 +149,13 @@ async def delete_user(
 ):
     user = await db.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+        raise HTTPException(status_code=404, detail="User not found")
     if user.id == admin.id:
-        raise HTTPException(
-            status_code=400, detail="Du kannst dich nicht selbst löschen"
-        )
+        raise HTTPException(status_code=400, detail="You cannot delete yourself")
 
     await db.delete(user)
     await db.commit()
-    return {"detail": "Benutzer gelöscht"}
+    return {"detail": "User deleted"}
 
 
 @router.get("/setup-required")

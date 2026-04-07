@@ -116,11 +116,11 @@ async def mount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="MergerFS config not found")
     result = await mergerfs_service.mount_mergerfs(config)
     if result["success"]:
-        await send_alert("SUCCESS", f"MergerFS **{config.name}** erfolgreich gemountet")
+        await send_alert("SUCCESS", f"MergerFS **{config.name}** mounted successfully")
     else:
         await send_alert(
             "ERROR",
-            f"MergerFS **{config.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+            f"MergerFS **{config.name}** failed: {result.get('error', 'Unknown')}",
         )
     return result
 

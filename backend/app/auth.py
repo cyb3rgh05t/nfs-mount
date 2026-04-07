@@ -51,7 +51,7 @@ async def get_current_user(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nicht authentifiziert",
+            detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -61,22 +61,20 @@ async def get_current_user(
         )
         sub = payload.get("sub")
         if sub is None:
-            raise HTTPException(status_code=401, detail="Ungültiger Token")
+            raise HTTPException(status_code=401, detail="Invalid token")
         user_id = int(sub)
     except (JWTError, ValueError):
-        raise HTTPException(status_code=401, detail="Ungültiger Token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     user = await db.get(User, user_id)
     if not user or not user.is_active:
-        raise HTTPException(
-            status_code=401, detail="Benutzer nicht gefunden oder deaktiviert"
-        )
+        raise HTTPException(status_code=401, detail="User not found or disabled")
     return user
 
 
 async def require_admin(current_user=Depends(get_current_user)):
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin-Rechte erforderlich")
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     return current_user
 
 

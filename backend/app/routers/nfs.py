@@ -82,11 +82,11 @@ async def mount_nfs(mount_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="NFS mount not found")
     result = await nfs_service.mount_nfs(mount)
     if result["success"]:
-        await send_alert("SUCCESS", f"NFS Mount **{mount.name}** erfolgreich gemountet")
+        await send_alert("SUCCESS", f"NFS Mount **{mount.name}** mounted successfully")
     else:
         await send_alert(
             "ERROR",
-            f"NFS Mount **{mount.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+            f"NFS Mount **{mount.name}** failed: {result.get('error', 'Unknown')}",
         )
     return result
 
@@ -209,11 +209,11 @@ async def enable_export(export_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="NFS export not found")
     result = await nfs_export_service.enable_export(export, db)
     if result["success"]:
-        await send_alert("SUCCESS", f"NFS Export **{export.name}** aktiviert")
+        await send_alert("SUCCESS", f"NFS Export **{export.name}** enabled")
     else:
         await send_alert(
             "ERROR",
-            f"NFS Export **{export.name}** fehlgeschlagen: {result.get('error', 'Unknown')}",
+            f"NFS Export **{export.name}** failed: {result.get('error', 'Unknown')}",
         )
     return result
 
@@ -225,7 +225,7 @@ async def disable_export(export_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="NFS export not found")
     result = await nfs_export_service.disable_export(export, db)
     if result["success"]:
-        await send_alert("INFO", f"NFS Export **{export.name}** deaktiviert")
+        await send_alert("INFO", f"NFS Export **{export.name}** disabled")
     return result
 
 

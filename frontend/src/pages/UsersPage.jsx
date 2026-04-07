@@ -87,10 +87,10 @@ export default function UsersPage() {
         };
         if (form.password) update.password = form.password;
         await api.updateUser(editing.id, update);
-        showSuccessMsg("Benutzer aktualisiert");
+        showSuccessMsg("User updated");
       } else {
         await api.createUser(form);
-        showSuccessMsg("Benutzer erstellt");
+        showSuccessMsg("User created");
       }
       setShowForm(false);
       setEditing(null);
@@ -101,10 +101,10 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (userId) => {
-    if (!confirm("Benutzer wirklich löschen?")) return;
+    if (!confirm("Delete this user?")) return;
     try {
       await api.deleteUser(userId);
-      showSuccessMsg("Benutzer gelöscht");
+      showSuccessMsg("User deleted");
       fetchUsers();
     } catch (e) {
       setError(e.message);
@@ -124,7 +124,7 @@ export default function UsersPage() {
     if (!newPassword) return;
     try {
       await api.updateUser(userId, { password: newPassword });
-      showSuccessMsg("Passwort zurückgesetzt");
+      showSuccessMsg("Password reset");
       setShowPwChange(null);
       setNewPassword("");
     } catch (e) {
@@ -152,7 +152,7 @@ export default function UsersPage() {
   if (!currentUser?.is_admin) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-nfs-muted">Admin-Rechte erforderlich</p>
+        <p className="text-nfs-muted">Admin privileges required</p>
       </div>
     );
   }
@@ -164,14 +164,14 @@ export default function UsersPage() {
           <div className="p-2 rounded-lg bg-nfs-primary/10">
             <Users className="w-5 h-5 text-nfs-primary" />
           </div>
-          Benutzerverwaltung
+          User Management
         </h1>
         <button
           onClick={openCreate}
           className="px-4 py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Neuer Benutzer
+          New User
         </button>
       </div>
 
@@ -218,7 +218,7 @@ export default function UsersPage() {
                   )}
                   {!u.is_active && (
                     <span className="px-2 py-0.5 text-[10px] font-semibold bg-red-500/20 text-red-400 rounded-full">
-                      Deaktiviert
+                      Disabled
                     </span>
                   )}
                 </div>
@@ -234,13 +234,13 @@ export default function UsersPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Neues Passwort"
+                    placeholder="New password"
                     className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-white text-xs w-36 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
                   />
                   <button
                     onClick={() => handleResetPassword(u.id)}
                     className="p-1.5 rounded-lg bg-nfs-primary/10 text-nfs-primary hover:bg-nfs-primary/20"
-                    title="Speichern"
+                    title="Save"
                   >
                     <Save className="w-3.5 h-3.5" />
                   </button>
@@ -258,7 +258,7 @@ export default function UsersPage() {
                 <button
                   onClick={() => setShowPwChange(u.id)}
                   className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-primary/10 transition-colors"
-                  title="Passwort zurücksetzen"
+                  title="Reset password"
                 >
                   <Key className="w-4 h-4" />
                 </button>
@@ -272,7 +272,7 @@ export default function UsersPage() {
                     ? "text-emerald-400 hover:bg-emerald-500/10"
                     : "text-red-400 hover:bg-red-500/10"
                 }`}
-                title={u.is_active ? "Deaktivieren" : "Aktivieren"}
+                title={u.is_active ? "Deactivate" : "Activate"}
               >
                 {u.is_active ? (
                   <Shield className="w-4 h-4" />
@@ -306,7 +306,7 @@ export default function UsersPage() {
       {/* Create/Edit Modal */}
       {showForm && (
         <Modal
-          title={editing ? "Benutzer bearbeiten" : "Neuer Benutzer"}
+          title={editing ? "Edit User" : "New User"}
           onClose={() => {
             setShowForm(false);
             setEditing(null);
@@ -315,7 +315,7 @@ export default function UsersPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-                Benutzername
+                Username
               </label>
               <input
                 className={inputClass}
@@ -328,7 +328,7 @@ export default function UsersPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-                Anzeigename
+                Display Name
               </label>
               <input
                 className={inputClass}
@@ -336,12 +336,12 @@ export default function UsersPage() {
                 onChange={(e) =>
                   setForm({ ...form, display_name: e.target.value })
                 }
-                placeholder="Max Mustermann"
+                placeholder="John Doe"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-nfs-muted mb-1.5">
-                Passwort {editing && "(leer = nicht ändern)"}
+                Password {editing && "(empty = no change)"}
               </label>
               <div className="relative">
                 <input
@@ -381,7 +381,7 @@ export default function UsersPage() {
               type="submit"
               className="w-full py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-semibold rounded-lg text-sm transition-colors"
             >
-              {editing ? "Speichern" : "Erstellen"}
+              {editing ? "Save" : "Create"}
             </button>
           </form>
         </Modal>

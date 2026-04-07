@@ -119,7 +119,7 @@ export default function MergerFSPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("MergerFS Config wirklich löschen?")) return;
+    if (!confirm("Delete this MergerFS config?")) return;
     try {
       await api.deleteMergerFS(id);
       fetchData();
@@ -164,7 +164,7 @@ export default function MergerFSPage() {
           className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Neue Config
+          New Config
         </button>
       </div>
 
@@ -183,21 +183,21 @@ export default function MergerFSPage() {
       {/* Info Box */}
       <div className="bg-nfs-card border border-purple-500/20 rounded-xl p-4 mb-6">
         <p className="text-xs text-nfs-muted leading-relaxed">
-          MergerFS vereint mehrere Speicher-Pfade zu einem einzigen Mount.
-          Optimiert mit full file caching, readdir cache, 120s attribute caching
-          für maximale Streaming-Performance.
+          MergerFS combines multiple storage paths into a single mount.
+          Optimized with full file caching, readdir cache, 120s attribute
+          caching for maximum streaming performance.
         </p>
       </div>
 
       {configs.length === 0 ? (
         <div className="text-center py-16 text-nfs-muted">
           <GitMerge className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>Keine MergerFS Configs vorhanden</p>
+          <p>No MergerFS configs available</p>
           <button
             onClick={openCreate}
             className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
           >
-            Jetzt erstellen →
+            Create one now →
           </button>
         </div>
       ) : (
@@ -281,7 +281,7 @@ export default function MergerFSPage() {
                 {/* Sources */}
                 <div className="mt-3 pl-7">
                   <p className="text-[10px] font-semibold text-nfs-muted uppercase tracking-wider mb-1">
-                    Quellen
+                    Sources
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {sources.map((src, i) => (
@@ -303,9 +303,7 @@ export default function MergerFSPage() {
       {/* Create/Edit Modal */}
       {showForm && (
         <Modal
-          title={
-            editing ? "MergerFS Config bearbeiten" : "Neue MergerFS Config"
-          }
+          title={editing ? "Edit MergerFS Config" : "New MergerFS Config"}
           onClose={() => setShowForm(false)}
         >
           <Field label="Name">
@@ -313,7 +311,7 @@ export default function MergerFSPage() {
               className={inputClass}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="z.B. UnionFS"
+              placeholder="e.g. UnionFS"
             />
           </Field>
           <Field label="Mount Point">
@@ -326,7 +324,7 @@ export default function MergerFSPage() {
               placeholder="/mnt/unionfs"
             />
           </Field>
-          <Field label="Quellen (getrennt durch :)">
+          <Field label="Sources (separated by :)">
             <input
               className={inputClass}
               value={form.sources}
@@ -334,7 +332,7 @@ export default function MergerFSPage() {
               placeholder="/mnt/downloads:/mnt/storage:/mnt/storage2"
             />
           </Field>
-          <Field label="MergerFS Optionen">
+          <Field label="MergerFS Options">
             <textarea
               className={`${inputClass} h-24 font-mono text-xs`}
               value={form.options}
@@ -360,7 +358,7 @@ export default function MergerFSPage() {
                   setForm({ ...form, enabled: e.target.checked })
                 }
               />
-              Aktiviert
+              Enabled
             </label>
           </div>
           <div className="flex justify-end gap-3">
@@ -368,13 +366,13 @@ export default function MergerFSPage() {
               onClick={() => setShowForm(false)}
               className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
             >
-              Abbrechen
+              Cancel
             </button>
             <button
               onClick={handleSave}
               className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
             >
-              {editing ? "Speichern" : "Erstellen"}
+              {editing ? "Save" : "Create"}
             </button>
           </div>
         </Modal>

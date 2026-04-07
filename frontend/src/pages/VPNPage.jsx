@@ -156,10 +156,10 @@ export default function VPNPage() {
           auto_connect: form.auto_connect,
           enabled: form.enabled,
         });
-        showSuccessMsg("VPN Konfiguration aktualisiert");
+        showSuccessMsg("VPN configuration updated");
       } else {
         await api.createVPNConfig(form);
-        showSuccessMsg("VPN Konfiguration erstellt");
+        showSuccessMsg("VPN configuration created");
       }
       setShowForm(false);
       setEditing(null);
@@ -173,8 +173,8 @@ export default function VPNPage() {
     setLoading(`connect-${id}`);
     try {
       const result = await api.connectVPN(id);
-      if (result.success) showSuccessMsg("VPN verbunden");
-      else setError(result.error || "Verbindung fehlgeschlagen");
+      if (result.success) showSuccessMsg("VPN connected");
+      else setError(result.error || "Connection failed");
       fetchData();
     } catch (e) {
       setError(e.message);
@@ -186,7 +186,7 @@ export default function VPNPage() {
     setLoading(`disconnect-${id}`);
     try {
       await api.disconnectVPN(id);
-      showSuccessMsg("VPN getrennt");
+      showSuccessMsg("VPN disconnected");
       fetchData();
     } catch (e) {
       setError(e.message);
@@ -195,10 +195,10 @@ export default function VPNPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("VPN Konfiguration wirklich löschen?")) return;
+    if (!confirm("Delete this VPN configuration?")) return;
     try {
       await api.deleteVPNConfig(id);
-      showSuccessMsg("VPN Konfiguration gelöscht");
+      showSuccessMsg("VPN configuration deleted");
       fetchData();
     } catch (e) {
       setError(e.message);
@@ -253,9 +253,9 @@ export default function VPNPage() {
       {configs.length === 0 ? (
         <div className="bg-nfs-card border border-nfs-border rounded-xl p-12 text-center">
           <Shield className="w-12 h-12 text-nfs-muted mx-auto mb-4" />
-          <p className="text-nfs-muted mb-2">Keine VPN Konfigurationen</p>
+          <p className="text-nfs-muted mb-2">No VPN configurations</p>
           <p className="text-sm text-nfs-muted">
-            Erstelle eine WireGuard oder OpenVPN Konfiguration
+            Create a WireGuard or OpenVPN configuration
           </p>
         </div>
       ) : (
@@ -319,7 +319,7 @@ export default function VPNPage() {
                                 : "bg-nfs-muted"
                             }`}
                           />
-                          {active ? "Verbunden" : "Getrennt"}
+                          {active ? "Connected" : "Disconnected"}
                         </span>
                         {st?.endpoint && (
                           <span className="text-xs text-nfs-muted">
@@ -340,7 +340,7 @@ export default function VPNPage() {
                     <button
                       onClick={() => setShowConfig(cfg)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                      title="Config anzeigen"
+                      title="View config"
                     >
                       <FileText className="w-4 h-4" />
                     </button>
@@ -351,7 +351,7 @@ export default function VPNPage() {
                         onClick={() => handleDisconnect(cfg.id)}
                         disabled={loading === `disconnect-${cfg.id}`}
                         className="p-2 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                        title="Trennen"
+                        title="Disconnect"
                       >
                         <Square className="w-4 h-4" />
                       </button>
@@ -360,7 +360,7 @@ export default function VPNPage() {
                         onClick={() => handleConnect(cfg.id)}
                         disabled={loading === `connect-${cfg.id}`}
                         className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
-                        title="Verbinden"
+                        title="Connect"
                       >
                         <Play className="w-4 h-4" />
                       </button>
@@ -370,7 +370,7 @@ export default function VPNPage() {
                     <button
                       onClick={() => openEdit(cfg)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-nfs-primary hover:bg-nfs-primary/10 transition-colors"
-                      title="Bearbeiten"
+                      title="Edit"
                     >
                       <Edit3 className="w-4 h-4" />
                     </button>
@@ -379,7 +379,7 @@ export default function VPNPage() {
                     <button
                       onClick={() => handleDelete(cfg.id)}
                       className="p-2 rounded-lg text-nfs-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Löschen"
+                      title="Delete"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -421,8 +421,8 @@ export default function VPNPage() {
         <Modal
           title={
             editing
-              ? "VPN Konfiguration bearbeiten"
-              : `Neue ${form.vpn_type === "wireguard" ? "WireGuard" : "OpenVPN"} Konfiguration`
+              ? "Edit VPN Configuration"
+              : `New ${form.vpn_type === "wireguard" ? "WireGuard" : "OpenVPN"} Configuration`
           }
           onClose={() => {
             setShowForm(false);
@@ -435,7 +435,7 @@ export default function VPNPage() {
                 className={inputClass}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="z.B. Office VPN"
+                placeholder="e.g. Office VPN"
                 required
               />
             </Field>
@@ -462,7 +462,7 @@ export default function VPNPage() {
               </Field>
             )}
 
-            <Field label="Konfiguration">
+            <Field label="Configuration">
               <textarea
                 className={`${inputClass} font-mono text-xs leading-relaxed`}
                 value={form.config_content}
@@ -470,7 +470,7 @@ export default function VPNPage() {
                   setForm({ ...form, config_content: e.target.value })
                 }
                 rows={14}
-                placeholder="Konfiguration hier einfügen..."
+                placeholder="Paste configuration here..."
                 spellCheck={false}
               />
             </Field>
@@ -494,7 +494,7 @@ export default function VPNPage() {
                     setForm({ ...form, enabled: e.target.checked })
                   }
                 />
-                Aktiviert
+                Enabled
               </label>
             </div>
 
@@ -502,7 +502,7 @@ export default function VPNPage() {
               type="submit"
               className="w-full py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-semibold rounded-lg text-sm transition-colors"
             >
-              {editing ? "Speichern" : "Erstellen"}
+              {editing ? "Save" : "Create"}
             </button>
           </form>
         </Modal>
@@ -511,17 +511,17 @@ export default function VPNPage() {
       {/* View Config Modal */}
       {showConfig && (
         <Modal
-          title={`${showConfig.name} - Konfiguration`}
+          title={`${showConfig.name} - Configuration`}
           onClose={() => setShowConfig(null)}
         >
           <div className="relative">
             <button
               onClick={() => {
                 navigator.clipboard.writeText(showConfig.config_content);
-                showSuccessMsg("In Zwischenablage kopiert");
+                showSuccessMsg("Copied to clipboard");
               }}
               className="absolute top-2 right-2 p-2 rounded-lg bg-nfs-input/80 text-nfs-muted hover:text-white transition-colors"
-              title="Kopieren"
+              title="Copy"
             >
               <Copy className="w-4 h-4" />
             </button>
