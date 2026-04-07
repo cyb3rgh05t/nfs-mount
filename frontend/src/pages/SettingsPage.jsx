@@ -963,9 +963,9 @@ export default function SettingsPage() {
                     className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all flex items-center justify-center gap-2"
                   >
                     {editingUser ? (
-                      <Save className="w-4 h-4" />
+                      <Save className="w-4 h-4 text-nfs-primary" />
                     ) : (
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-4 h-4 text-nfs-primary" />
                     )}
                     {editingUser ? "Save" : "Create"}
                   </button>
@@ -1371,7 +1371,11 @@ export default function SettingsPage() {
                   },
                   { label: "CPU Count", key: "cpu_count", editable: false },
                   { label: "RPS CPU Mask", key: "rps_cpus", editable: true },
-                  { label: "XPS CPU Mask", key: "xps_cpus", editable: true },
+                  {
+                    label: "XPS CPU Mask",
+                    key: "xps_cpus",
+                    editable: rpsXps.xps_cpus && rpsXps.xps_cpus !== "N/A",
+                  },
                   { label: "MTU", key: "mtu", editable: true },
                 ].map(({ label, key, editable }) => (
                   <div
@@ -1389,7 +1393,9 @@ export default function SettingsPage() {
                       />
                     ) : (
                       <code className="text-xs text-nfs-primary font-mono font-semibold">
-                        {rpsXps[key] ?? "N/A"}
+                        {rpsXps[key] === "N/A"
+                          ? "Not Supported"
+                          : (rpsXps[key] ?? "N/A")}
                       </code>
                     )}
                   </div>

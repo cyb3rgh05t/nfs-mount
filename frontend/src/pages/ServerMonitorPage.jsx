@@ -310,9 +310,9 @@ export default function ServerMonitorPage() {
           className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
         >
           {modal === "create" ? (
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-nfs-primary" />
           ) : (
-            <Save className="w-4 h-4" />
+            <Save className="w-4 h-4 text-nfs-primary" />
           )}
           {modal === "create" ? "Add Server" : "Save Changes"}
         </button>

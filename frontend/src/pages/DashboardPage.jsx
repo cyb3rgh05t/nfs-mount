@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Plus,
   Download,
+  Upload,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
@@ -66,6 +67,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useCachedState("dash-stats", null);
   const [nfsStatus, setNfsStatus] = useCachedState("dash-nfs", []);
   const [mergerStatus, setMergerStatus] = useCachedState("dash-merger", []);
+  const [nfsExports, setNfsExports] = useCachedState("dash-exports", []);
   const [vpnStatus, setVpnStatus] = useCachedState("dash-vpn", []);
   const [kernelParams, setKernelParams] = useCachedState("dash-kernel", []);
   const [rpsXps, setRpsXps] = useCachedState("dash-rpsxps", null);
@@ -74,11 +76,12 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [st, sys, nfs, merger, vpn, kp, rps] = await Promise.all([
+      const [st, sys, nfs, merger, exports, vpn, kp, rps] = await Promise.all([
         api.getSystemStatus(),
         api.getSystemStats(),
         api.getNFSStatus().catch(() => []),
         api.getMergerFSStatus().catch(() => []),
+        api.getNFSExportsStatus().catch(() => []),
         api.getAllVPNStatus().catch(() => []),
         api.getKernelParams().catch(() => []),
         api.getRpsXps().catch(() => null),
@@ -87,6 +90,7 @@ export default function DashboardPage() {
       setStats(sys);
       setNfsStatus(nfs);
       setMergerStatus(merger);
+      setNfsExports(exports);
       setVpnStatus(vpn);
       setKernelParams(kp);
       setRpsXps(rps);
@@ -203,7 +207,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Mount Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* NFS Mounts */}
         <div
           onClick={() => navigate("/nfs/client")}
@@ -299,6 +303,51 @@ export default function DashboardPage() {
                       className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
                     />
                     {c.mounted ? "Mounted" : "Unmounted"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* NFS Exports */}
+        <div
+          onClick={() => navigate("/nfs/exports")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Upload className="w-4 h-4 text-blue-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">NFS Exports</h2>
+            <span className="ml-auto text-xs text-nfs-muted">
+              {nfsExports.filter((e) => e.is_active).length} active
+            </span>
+          </div>
+          {nfsExports.length === 0 ? (
+            <InfoBox type="warning">No NFS exports configured</InfoBox>
+          ) : (
+            <div className="space-y-2">
+              {nfsExports.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">{e.name}</p>
+                    <p className="text-xs text-nfs-muted">{e.export_path}</p>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                      e.is_active
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : "bg-red-500/15 text-red-400 border-red-500/30"
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${e.is_active ? "bg-emerald-400" : "bg-red-400"}`}
+                    />
+                    {e.is_active ? "Exported" : "Inactive"}
                   </span>
                 </div>
               ))}
