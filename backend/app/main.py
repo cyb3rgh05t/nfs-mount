@@ -148,5 +148,15 @@ if os.path.isdir(frontend_dist):
         base = Path(frontend_dist).resolve()
         file_path = (base / full_path).resolve()
         if full_path and file_path.is_file() and str(file_path).startswith(str(base)):
-            return FileResponse(str(file_path))
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
+            # Hashed assets get long cache, everything else no-cache
+            headers = {}
+            if "/assets/" in full_path:
+                headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            else:
+                headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            return FileResponse(str(file_path), headers=headers)
+        # index.html (SPA fallback) — always revalidate
+        return FileResponse(
+            os.path.join(frontend_dist, "index.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
