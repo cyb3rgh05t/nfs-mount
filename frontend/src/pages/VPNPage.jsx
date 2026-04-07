@@ -18,6 +18,8 @@ import {
   FileText,
 } from "lucide-react";
 import api from "../api/client";
+import { useToast } from "../components/ToastProvider";
+import { useConfirm } from "../components/ConfirmProvider";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -86,7 +88,8 @@ export default function VPNPage() {
   const [showConfig, setShowConfig] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const toast = useToast();
+  const confirmDlg = useConfirm();
   const [form, setForm] = useState({
     name: "",
     vpn_type: "wireguard",
@@ -117,8 +120,7 @@ export default function VPNPage() {
   }, []);
 
   const showSuccessMsg = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+    toast.success(msg);
   };
 
   const openCreate = (type = "wireguard") => {
@@ -156,52 +158,68 @@ export default function VPNPage() {
           auto_connect: form.auto_connect,
           enabled: form.enabled,
         });
-        showSuccessMsg("VPN configuration updated");
+        toast.success(`VPN "${form.name}" updated`);
       } else {
         await api.createVPNConfig(form);
-        showSuccessMsg("VPN configuration created");
+        toast.success(`VPN "${form.name}" created`);
       }
       setShowForm(false);
       setEditing(null);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleConnect = async (id) => {
+    const cfg = configs.find((c) => c.id === id);
     setLoading(`connect-${id}`);
     try {
       const result = await api.connectVPN(id);
-      if (result.success) showSuccessMsg("VPN connected");
-      else setError(result.error || "Connection failed");
+      if (result.success) toast.success(`VPN "${cfg?.name}" connected`);
+      else toast.error(result.error || "Connection failed");
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleDisconnect = async (id) => {
+    const cfg = configs.find((c) => c.id === id);
+    const ok = await confirmDlg({
+      title: "Disconnect VPN?",
+      message: `Disconnect "${cfg?.name || "this VPN"}"? Network traffic will no longer be tunneled.`,
+      variant: "warning",
+      confirmText: "Disconnect",
+    });
+    if (!ok) return;
     setLoading(`disconnect-${id}`);
     try {
       await api.disconnectVPN(id);
-      showSuccessMsg("VPN disconnected");
+      toast.success(`VPN "${cfg?.name}" disconnected`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this VPN configuration?")) return;
+    const cfg = configs.find((c) => c.id === id);
+    const ok = await confirmDlg({
+      title: "Delete VPN Configuration?",
+      message: `This will disconnect and remove "${cfg?.name || "this VPN"}". This action cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await api.deleteVPNConfig(id);
-      showSuccessMsg("VPN configuration deleted");
+      toast.success(`VPN "${cfg?.name}" deleted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -241,12 +259,6 @@ export default function VPNPage() {
           <button onClick={() => setError("")}>
             <X className="w-4 h-4 opacity-60 hover:opacity-100" />
           </button>
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm mb-4">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{success}</span>
         </div>
       )}
 
@@ -518,7 +530,7 @@ export default function VPNPage() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(showConfig.config_content);
-                showSuccessMsg("Copied to clipboard");
+                toast.success("Copied to clipboard");
               }}
               className="absolute top-2 right-2 p-2 rounded-lg bg-nfs-input/80 text-nfs-muted hover:text-white transition-colors"
               title="Copy"

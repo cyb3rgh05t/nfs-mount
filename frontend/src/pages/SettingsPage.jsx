@@ -9,15 +9,13 @@ import {
   TestTube,
   Key,
   Cpu,
-  X,
-  CheckCircle,
-  AlertCircle,
   User,
   Lock,
   Eye,
   EyeOff,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 import api from "../api/client";
 
 const inputClass =
@@ -39,11 +37,10 @@ function Section({ icon: Icon, title, iconColor, children }) {
 
 export default function SettingsPage() {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [configs, setConfigs] = useState([]);
   const [kernelParams, setKernelParams] = useState([]);
   const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [discordForm, setDiscordForm] = useState({
     webhook_url: "",
     enabled: false,
@@ -88,7 +85,7 @@ export default function SettingsPage() {
         });
       }
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -96,38 +93,33 @@ export default function SettingsPage() {
     fetchData();
   }, []);
 
-  const showSuccess = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
-  };
-
   const saveApiKey = () => {
     localStorage.setItem("apiKey", apiKey);
-    showSuccess("API key saved");
+    toast.success("API key saved");
   };
 
   const saveProfile = async () => {
     try {
       const updated = await api.updateMe({ display_name: displayName });
       updateUser(updated);
-      showSuccess("Profile updated");
+      toast.success("Profile updated");
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const changePassword = async () => {
     if (!currentPassword || !newPassword) {
-      setError("Both password fields are required");
+      toast.warning("Both password fields are required");
       return;
     }
     try {
       await api.changePassword(currentPassword, newPassword);
-      showSuccess("Password changed");
+      toast.success("Password changed");
       setCurrentPassword("");
       setNewPassword("");
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -139,10 +131,10 @@ export default function SettingsPage() {
       } else {
         await api.createNotification({ type: "discord", ...discordForm });
       }
-      showSuccess("Discord configuration saved");
+      toast.success("Discord configuration saved");
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -154,28 +146,28 @@ export default function SettingsPage() {
       } else {
         await api.createNotification({ type: "telegram", ...telegramForm });
       }
-      showSuccess("Telegram configuration saved");
+      toast.success("Telegram configuration saved");
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const testDiscord = async () => {
     try {
       await api.testNotification("discord", "Test from NFS-MergerFS Manager");
-      showSuccess("Discord test sent");
+      toast.success("Discord test sent");
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const testTelegram = async () => {
     try {
       await api.testNotification("telegram", "Test from NFS-MergerFS Manager");
-      showSuccess("Telegram test sent");
+      toast.success("Telegram test sent");
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -187,27 +179,6 @@ export default function SettingsPage() {
         </div>
         Settings
       </h1>
-
-      {error && (
-        <div className="flex items-center justify-between gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm mb-4">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <button
-            onClick={() => setError("")}
-            className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm mb-4">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{success}</span>
-        </div>
-      )}
 
       {/* Profile */}
       <Section
@@ -499,7 +470,7 @@ export default function SettingsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-nfs-muted">Keine Parameter verfügbar</p>
+          <p className="text-sm text-nfs-muted">No parameters available</p>
         )}
       </Section>
     </div>

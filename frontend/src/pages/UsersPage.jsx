@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/client";
+import { useToast } from "../components/ToastProvider";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const inputClass =
   "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
@@ -45,7 +47,8 @@ export default function UsersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const toast = useToast();
+  const confirmDlg = useConfirm();
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({
     username: "",
@@ -72,8 +75,7 @@ export default function UsersPage() {
   }, []);
 
   const showSuccessMsg = (msg) => {
-    setSuccess(msg);
-    setTimeout(() => setSuccess(""), 3000);
+    toast.success(msg);
   };
 
   const handleSubmit = async (e) => {
@@ -101,22 +103,38 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (userId) => {
-    if (!confirm("Delete this user?")) return;
+    const u = users.find((x) => x.id === userId);
+    const ok = await confirmDlg({
+      title: "Delete User?",
+      message: `This will permanently delete "${u?.display_name || u?.username || "this user"}". This action cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await api.deleteUser(userId);
-      showSuccessMsg("User deleted");
+      toast.success(`User "${u?.display_name || u?.username}" deleted`);
       fetchUsers();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleToggleActive = async (user) => {
+    const action = user.is_active ? "deactivate" : "activate";
+    const ok = await confirmDlg({
+      title: `${user.is_active ? "Deactivate" : "Activate"} User?`,
+      message: `${user.is_active ? "Deactivate" : "Activate"} "${user.display_name || user.username}"?${user.is_active ? " They will be logged out." : ""}`,
+      variant: user.is_active ? "warning" : "info",
+      confirmText: user.is_active ? "Deactivate" : "Activate",
+    });
+    if (!ok) return;
     try {
       await api.updateUser(user.id, { is_active: !user.is_active });
+      toast.success(`User "${user.display_name || user.username}" ${action}d`);
       fetchUsers();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
@@ -184,12 +202,6 @@ export default function UsersPage() {
           <button onClick={() => setError("")}>
             <X className="w-4 h-4 opacity-60 hover:opacity-100" />
           </button>
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm mb-4">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>{success}</span>
         </div>
       )}
 

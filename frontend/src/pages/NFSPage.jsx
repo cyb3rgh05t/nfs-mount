@@ -15,6 +15,8 @@ import {
   XCircle,
 } from "lucide-react";
 import api from "../api/client";
+import { useToast } from "../components/ToastProvider";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const DEFAULT_MOUNT_OPTIONS =
   "vers=4.2,proto=tcp,hard,nconnect=16,rsize=1048576,wsize=1048576,async,noatime,nocto,ac,actimeo=3600";
@@ -62,6 +64,8 @@ function MountsTab() {
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState({
     name: "",
     server_ip: "",
@@ -121,55 +125,94 @@ function MountsTab() {
     try {
       if (editing) {
         await api.updateNFSMount(editing.id, form);
+        toast.success(`NFS mount "${form.name}" updated`);
       } else {
         await api.createNFSMount(form);
+        toast.success(`NFS mount "${form.name}" created`);
       }
       setShowForm(false);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this NFS mount?")) return;
+    const mount = mounts.find((m) => m.id === id);
+    const ok = await confirm({
+      title: "Delete NFS Mount?",
+      message: `This will unmount and remove "${mount?.name || "this mount"}". This action cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await api.deleteNFSMount(id);
+      toast.success(`NFS mount "${mount?.name}" deleted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleMount = async (id) => {
+    const mount = mounts.find((m) => m.id === id);
     setLoading(`mount-${id}`);
     try {
-      await api.mountNFS(id);
+      const result = await api.mountNFS(id);
+      if (result.success) {
+        toast.success(`NFS mount "${mount?.name}" mounted successfully`);
+      } else {
+        toast.error(`Mount failed: ${result.error || "Unknown error"}`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleUnmount = async (id) => {
+    const mount = mounts.find((m) => m.id === id);
+    const ok = await confirm({
+      title: "Unmount NFS?",
+      message: `Unmount "${mount?.name || "this mount"}"? Active connections will be interrupted.`,
+      variant: "warning",
+      confirmText: "Unmount",
+    });
+    if (!ok) return;
     setLoading(`unmount-${id}`);
     try {
       await api.unmountNFS(id);
+      toast.success(`NFS mount "${mount?.name}" unmounted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleMountAll = async () => {
+    const ok = await confirm({
+      title: "Mount All NFS?",
+      message: "This will mount all enabled NFS shares.",
+      variant: "info",
+      confirmText: "Mount All",
+    });
+    if (!ok) return;
     setLoading("mount-all");
     try {
-      await api.mountAllNFS();
+      const results = await api.mountAllNFS();
+      const ok = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success).length;
+      if (fail > 0) {
+        toast.warning(`Mounted ${ok}/${results.length} (${fail} failed)`);
+      } else {
+        toast.success(`All ${ok} NFS mounts mounted successfully`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
@@ -442,6 +485,8 @@ function ExportsTab() {
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState({
     name: "",
     export_path: "/srv/nfs/",
@@ -495,55 +540,90 @@ function ExportsTab() {
     try {
       if (editing) {
         await api.updateNFSExport(editing.id, form);
+        toast.success(`NFS export "${form.name}" updated`);
       } else {
         await api.createNFSExport(form);
+        toast.success(`NFS export "${form.name}" created`);
       }
       setShowForm(false);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this NFS export?")) return;
+    const exp = exports.find((e) => e.id === id);
+    const ok = await confirm({
+      title: "Delete NFS Export?",
+      message: `This will remove "${exp?.name || "this export"}". This action cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await api.deleteNFSExport(id);
+      toast.success(`NFS export "${exp?.name}" deleted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleEnable = async (id) => {
+    const exp = exports.find((e) => e.id === id);
     setLoading(`enable-${id}`);
     try {
-      await api.enableNFSExport(id);
+      const result = await api.enableNFSExport(id);
+      if (result.success) {
+        toast.success(`NFS export "${exp?.name}" enabled`);
+      } else {
+        toast.error(`Enable failed: ${result.error || "Unknown error"}`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleDisable = async (id) => {
+    const exp = exports.find((e) => e.id === id);
     setLoading(`disable-${id}`);
     try {
-      await api.disableNFSExport(id);
+      const result = await api.disableNFSExport(id);
+      if (result.success) {
+        toast.success(`NFS export "${exp?.name}" disabled`);
+      } else {
+        toast.error(`Disable failed: ${result.error || "Unknown error"}`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleApplyAll = async () => {
+    const ok = await confirm({
+      title: "Apply All Exports?",
+      message:
+        "This will write all exports to /etc/exports and reload the NFS server.",
+      variant: "info",
+      confirmText: "Apply All",
+    });
+    if (!ok) return;
     setLoading("apply-all");
     try {
-      await api.applyNFSExports();
+      const result = await api.applyNFSExports();
+      if (result.success) {
+        toast.success("All NFS exports applied successfully");
+      } else {
+        toast.error(`Apply failed: ${result.error || "Unknown error"}`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { GitMerge, Plus, Play, Square, Trash2, Edit3, X } from "lucide-react";
 import api from "../api/client";
+import { useToast } from "../components/ToastProvider";
+import { useConfirm } from "../components/ConfirmProvider";
 
 const DEFAULT_OPTIONS =
   "rw,async_read=true,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=auto-full,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,minfreespace=10G,fsname=mergerfs";
@@ -45,6 +47,8 @@ export default function MergerFSPage() {
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const toast = useToast();
+  const confirm = useConfirm();
   const [form, setForm] = useState({
     name: "",
     mount_point: "/mnt/unionfs",
@@ -108,44 +112,69 @@ export default function MergerFSPage() {
       };
       if (editing) {
         await api.updateMergerFS(editing.id, data);
+        toast.success(`MergerFS config "${form.name}" updated`);
       } else {
         await api.createMergerFS(data);
+        toast.success(`MergerFS config "${form.name}" created`);
       }
       setShowForm(false);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this MergerFS config?")) return;
+    const cfg = configs.find((c) => c.id === id);
+    const ok = await confirm({
+      title: "Delete MergerFS Config?",
+      message: `This will unmount and remove "${cfg?.name || "this config"}". This action cannot be undone.`,
+      variant: "danger",
+      confirmText: "Delete",
+    });
+    if (!ok) return;
     try {
       await api.deleteMergerFS(id);
+      toast.success(`MergerFS config "${cfg?.name}" deleted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 
   const handleMount = async (id) => {
+    const cfg = configs.find((c) => c.id === id);
     setLoading(`mount-${id}`);
     try {
-      await api.mountMergerFS(id);
+      const result = await api.mountMergerFS(id);
+      if (result.success) {
+        toast.success(`MergerFS "${cfg?.name}" mounted successfully`);
+      } else {
+        toast.error(`Mount failed: ${result.error || "Unknown error"}`);
+      }
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
 
   const handleUnmount = async (id) => {
+    const cfg = configs.find((c) => c.id === id);
+    const ok = await confirm({
+      title: "Unmount MergerFS?",
+      message: `Unmount "${cfg?.name || "this config"}"? Active connections will be interrupted.`,
+      variant: "warning",
+      confirmText: "Unmount",
+    });
+    if (!ok) return;
     setLoading(`unmount-${id}`);
     try {
       await api.unmountMergerFS(id);
+      toast.success(`MergerFS "${cfg?.name}" unmounted`);
       fetchData();
     } catch (e) {
-      setError(e.message);
+      toast.error(e.message);
     }
     setLoading("");
   };
