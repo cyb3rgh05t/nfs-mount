@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import logging
+import secrets
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -43,8 +44,12 @@ async def get_current_user(
 ):
     from .models.user import User
 
-    # Try API key first (backward compat)
-    if api_key and settings.api_key and api_key == settings.api_key:
+    # Try API key first (backward compat) – constant-time comparison
+    if (
+        api_key
+        and settings.api_key
+        and secrets.compare_digest(api_key, settings.api_key)
+    ):
         result = await db.execute(select(User).where(User.is_admin == True).limit(1))
         user = result.scalar_one_or_none()
         if user:

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import subprocess
 
 from sqlalchemy import select
@@ -10,6 +11,30 @@ from ..database import async_session
 from ..models.vpn_config import VPNConfig
 
 logger = logging.getLogger("nfs-manager.service.vpn")
+
+WG_CONF_DIR = "/etc/wireguard"
+OVPN_CONF_DIR = "/etc/openvpn"
+
+# OpenVPN directives that can execute arbitrary commands
+_DANGEROUS_OVPN_DIRECTIVES = re.compile(
+    r"^\s*(script-security\s+[2-9]|up\s|down\s|client-connect\s|client-disconnect\s|"
+    r"learn-address\s|auth-user-pass-verify\s|tls-verify\s|ipchange\s|"
+    r"route-up\s|route-pre-down\s|plugin\s)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _validate_vpn_config(config: VPNConfig):
+    """Reject VPN configs containing dangerous directives (RCE prevention)."""
+    if config.vpn_type == "openvpn":
+        match = _DANGEROUS_OVPN_DIRECTIVES.search(config.config_content)
+        if match:
+            directive = match.group(0).strip().split()[0]
+            raise ValueError(
+                f"OpenVPN config contains blocked directive: '{directive}'. "
+                "Script execution directives are not allowed."
+            )
+
 
 WG_CONF_DIR = "/etc/wireguard"
 OVPN_CONF_DIR = "/etc/openvpn"
@@ -75,6 +100,13 @@ def _remove_config_file(config: VPNConfig):
 
 async def connect_vpn(config: VPNConfig) -> dict:
     """Connect a VPN tunnel."""
+    # Validate config content before writing to disk
+    try:
+        _validate_vpn_config(config)
+    except ValueError as e:
+        logger.error(f"VPN config rejected: {e}")
+        return {"success": False, "error": str(e), "name": config.name}
+
     iface = _get_interface_name(config)
     _write_config_file(config)
 

@@ -11,6 +11,7 @@ services:
       - "DEFAULT_ADMIN_USER=admin"
       - "DEFAULT_ADMIN_PASS=admin"
       - "API_KEY="
+      - "CORS_ORIGINS=https://nfs.deinedomain.com"
       - "DISCORD_WEBHOOK="
       - "TELEGRAM_BOT_TOKEN="
       - "TELEGRAM_CHAT_ID="

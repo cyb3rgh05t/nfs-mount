@@ -1,6 +1,8 @@
 import logging
+import time
+from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +28,31 @@ logger = logging.getLogger("nfs-manager.router.auth")
 
 router = APIRouter()
 
+# Simple in-memory rate limiter for login attempts
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_ATTEMPTS = 5  # max attempts per window
+_WINDOW_SECONDS = 300  # 5 minute window
+
+
+def _check_rate_limit(ip: str):
+    """Raise 429 if too many login attempts from this IP."""
+    now = time.monotonic()
+    # Purge old entries
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _WINDOW_SECONDS]
+    if len(_login_attempts[ip]) >= _MAX_ATTEMPTS:
+        logger.warning("Rate limit exceeded for IP: %s", ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Try again later.",
+        )
+    _login_attempts[ip].append(now)
+
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(data: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
+
     result = await db.execute(
         select(User).where(User.username == data.username.lower().strip())
     )

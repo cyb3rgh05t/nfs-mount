@@ -1,8 +1,10 @@
 import os
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy import select, func
@@ -81,6 +83,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS – only allow same-origin in production; override via CORS_ORIGINS env
+cors_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+cors_origins = [o.strip() for o in cors_origins if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Request logging middleware
 app.add_middleware(RequestLoggingMiddleware)
 
@@ -112,7 +125,9 @@ if os.path.isdir(frontend_dist):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
-        file_path = os.path.join(frontend_dist, full_path)
-        if full_path and os.path.isfile(file_path):
-            return FileResponse(file_path)
+        # Resolve and verify the path stays within frontend_dist (prevent traversal)
+        base = Path(frontend_dist).resolve()
+        file_path = (base / full_path).resolve()
+        if full_path and file_path.is_file() and str(file_path).startswith(str(base)):
+            return FileResponse(str(file_path))
         return FileResponse(os.path.join(frontend_dist, "index.html"))
