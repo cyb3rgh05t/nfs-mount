@@ -20,6 +20,8 @@ import {
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
+import { useCachedState } from "../hooks/useCache";
+import Toggle from "../components/Toggle";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -81,13 +83,14 @@ auth SHA256
 verb 3`;
 
 export default function VPNPage() {
-  const [configs, setConfigs] = useState([]);
-  const [statuses, setStatuses] = useState({});
+  const [configs, setConfigs] = useCachedState("vpn-configs", []);
+  const [statuses, setStatuses] = useCachedState("vpn-statuses", {});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showConfig, setShowConfig] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
   const confirmDlg = useConfirm();
   const [form, setForm] = useState({
@@ -228,24 +231,37 @@ export default function VPNPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
           <div className="p-2 rounded-lg bg-emerald-500/10">
-            <Shield className="w-5 h-5 text-emerald-400" />
+            <Shield className="w-5 h-5 text-nfs-primary" />
           </div>
           VPN Tunnel
         </h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => openCreate("wireguard")}
-            className="px-4 py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm flex items-center gap-2 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-nfs-primary" />
             WireGuard
           </button>
           <button
             onClick={() => openCreate("openvpn")}
-            className="px-4 py-2.5 bg-nfs-card border border-nfs-primary/50 text-nfs-primary hover:bg-nfs-primary/10 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-nfs-primary" />
             OpenVPN
+          </button>
+          <button
+            onClick={async () => {
+              setRefreshing(true);
+              await fetchData();
+              setRefreshing(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-nfs-primary ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
           </button>
         </div>
       </div>
@@ -264,11 +280,27 @@ export default function VPNPage() {
 
       {configs.length === 0 ? (
         <div className="bg-nfs-card border border-nfs-border rounded-xl p-12 text-center">
-          <Shield className="w-12 h-12 text-nfs-muted mx-auto mb-4" />
+          <Shield className="w-12 h-12 text-nfs-muted mx-auto mb-4 opacity-30" />
           <p className="text-nfs-muted mb-2">No VPN configurations</p>
-          <p className="text-sm text-nfs-muted">
+          <p className="text-sm text-nfs-muted mb-4">
             Create a WireGuard or OpenVPN configuration
           </p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => openCreate("wireguard")}
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4 text-nfs-primary" />
+              WireGuard
+            </button>
+            <button
+              onClick={() => openCreate("openvpn")}
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4 text-nfs-primary" />
+              OpenVPN
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -488,31 +520,21 @@ export default function VPNPage() {
             </Field>
 
             <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm text-nfs-text">
-                <input
-                  type="checkbox"
-                  checked={form.auto_connect}
-                  onChange={(e) =>
-                    setForm({ ...form, auto_connect: e.target.checked })
-                  }
-                />
-                Auto-Connect
-              </label>
-              <label className="flex items-center gap-2 text-sm text-nfs-text">
-                <input
-                  type="checkbox"
-                  checked={form.enabled}
-                  onChange={(e) =>
-                    setForm({ ...form, enabled: e.target.checked })
-                  }
-                />
-                Enabled
-              </label>
+              <Toggle
+                checked={form.auto_connect}
+                onChange={(val) => setForm({ ...form, auto_connect: val })}
+                label="Auto-Connect"
+              />
+              <Toggle
+                checked={form.enabled}
+                onChange={(val) => setForm({ ...form, enabled: val })}
+                label="Enabled"
+              />
             </div>
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-semibold rounded-lg text-sm transition-colors"
+              className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm transition-all"
             >
               {editing ? "Save" : "Create"}
             </button>

@@ -87,7 +87,7 @@ function ConfirmDialog({
         onClick={() => onClose(false)}
       />
       {/* Dialog */}
-      <div className="relative bg-[#1e2733] border border-gray-700 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-scale-in">
+      <div className="relative bg-nfs-card border border-nfs-border rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-scale-in">
         <div className="flex items-start gap-4">
           <div className={`p-3 rounded-full ${preset.iconBg}`}>
             <Icon className={`w-6 h-6 ${preset.iconColor}`} />
@@ -100,13 +100,13 @@ function ConfirmDialog({
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={() => onClose(false)}
-            className="px-4 py-2 text-sm rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-200 transition"
+            className="px-4 py-2 text-sm rounded-lg bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-medium transition-all"
           >
             {cancelText}
           </button>
           <button
             onClick={() => onClose(true)}
-            className={`px-4 py-2 text-sm rounded-lg text-white transition ${preset.confirmBtn}`}
+            className="px-4 py-2 text-sm rounded-lg bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-medium transition-all"
           >
             {btnText}
           </button>

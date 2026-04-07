@@ -94,12 +94,12 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              className="w-full py-2.5 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white font-semibold rounded-lg text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
               {loading ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <LogIn className="w-4 h-4" />
+                <LogIn className="w-4 h-4 text-nfs-primary" />
               )}
               {loading ? "Signing in..." : "Sign In"}
             </button>

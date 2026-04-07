@@ -11,13 +11,13 @@ echo "[TUNING] Applying kernel parameters for high-throughput NFS streaming..."
 # NFS/SUNRPC: increase concurrent RPC slots (default 65 -> 128)
 sysctl -w sunrpc.tcp_max_slot_table_entries=128 2>/dev/null || true
 
-# Network buffers: maximize TCP throughput
-sysctl -w net.core.rmem_max=16777216 2>/dev/null || true
-sysctl -w net.core.wmem_max=16777216 2>/dev/null || true
+# Network buffers: 128MB for high-throughput 10G links
+sysctl -w net.core.rmem_max=134217728 2>/dev/null || true
+sysctl -w net.core.wmem_max=134217728 2>/dev/null || true
 sysctl -w net.core.rmem_default=1048576 2>/dev/null || true
 sysctl -w net.core.wmem_default=1048576 2>/dev/null || true
-sysctl -w net.ipv4.tcp_rmem="4096 1048576 16777216" 2>/dev/null || true
-sysctl -w net.ipv4.tcp_wmem="4096 1048576 16777216" 2>/dev/null || true
+sysctl -w net.ipv4.tcp_rmem="4096 1048576 134217728" 2>/dev/null || true
+sysctl -w net.ipv4.tcp_wmem="4096 1048576 134217728" 2>/dev/null || true
 
 # TCP optimizations
 sysctl -w net.ipv4.tcp_window_scaling=1 2>/dev/null || true
@@ -26,12 +26,42 @@ sysctl -w net.ipv4.tcp_sack=1 2>/dev/null || true
 sysctl -w net.ipv4.tcp_no_metrics_save=1 2>/dev/null || true
 sysctl -w net.ipv4.tcp_moderate_rcvbuf=1 2>/dev/null || true
 
+# BBR congestion control (reduces packet loss on high-throughput links)
+sysctl -w net.core.default_qdisc=fq 2>/dev/null || true
+sysctl -w net.ipv4.tcp_congestion_control=bbr 2>/dev/null || true
+
 # VM/Page cache tuning for streaming workloads
 sysctl -w vm.dirty_ratio=40 2>/dev/null || true
 sysctl -w vm.dirty_background_ratio=10 2>/dev/null || true
 sysctl -w vm.vfs_cache_pressure=50 2>/dev/null || true
 
 echo "[TUNING] Kernel parameters applied."
+
+# ── CPU Load Balancing (RPS/XPS) ──
+ETH_DEV=$(ip -o link show | awk -F': ' '!/lo|docker|br-|veth|wg/{print $2; exit}')
+if [ -n "$ETH_DEV" ]; then
+    echo "[TUNING] Optimizing CPU load distribution (RPS/XPS) for $ETH_DEV..."
+    # Detect CPU count and build bitmask
+    NCPU=$(nproc 2>/dev/null || echo 1)
+    if [ "$NCPU" -ge 64 ]; then
+        MASK="ffffffff,ffffffff"
+    elif [ "$NCPU" -ge 32 ]; then
+        MASK="ffffffff"
+    else
+        MASK=$(printf '%x' $(( (1 << NCPU) - 1 )))
+    fi
+    for rx in /sys/class/net/$ETH_DEV/queues/rx-*/rps_cpus; do
+        [ -f "$rx" ] && echo "$MASK" > "$rx" 2>/dev/null || true
+    done
+    for tx in /sys/class/net/$ETH_DEV/queues/tx-*/xps_cpus; do
+        [ -f "$tx" ] && echo "$MASK" > "$tx" 2>/dev/null || true
+    done
+    # Set MTU
+    ip link set dev $ETH_DEV mtu 1500 2>/dev/null || true
+    echo "[TUNING] CPU load balancing applied for $ETH_DEV (mask=$MASK)."
+else
+    echo "[TUNING] No primary network interface found - skipping RPS/XPS."
+fi
 
 # ── WireGuard VPN ──
 if [ -f /config/wg0.conf ]; then

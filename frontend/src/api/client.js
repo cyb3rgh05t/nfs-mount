@@ -48,6 +48,7 @@ async function request(method, path, body) {
     throw new Error(err.detail || "Request failed");
   }
   log("debug", `${method} ${path} -> ${res.status} (${duration}ms)`);
+  if (res.status === 204) return null;
   return res.json();
 }
 
@@ -115,7 +116,10 @@ const api = {
   getKernelParams: () => request("GET", "/system/kernel-params"),
   applyKernelTuning: (params) =>
     request("POST", "/system/kernel-tuning", { params }),
+  getRpsXps: () => request("GET", "/system/rps-xps"),
+  applyRpsXps: (settings) => request("POST", "/system/rps-xps", settings),
   getLogs: (lines = 100) => request("GET", `/system/logs?lines=${lines}`),
+  getDockerInfo: () => request("GET", "/system/docker-info"),
 
   // Notifications
   getNotificationConfigs: () => request("GET", "/notifications/configs"),
@@ -125,6 +129,50 @@ const api = {
   deleteNotification: (id) => request("DELETE", `/notifications/configs/${id}`),
   testNotification: (type, message) =>
     request("POST", "/notifications/test", { type, message }),
+
+  // API Keys
+  getApiKeys: () => request("GET", "/api-keys/"),
+  createApiKey: (name) => request("POST", "/api-keys/", { name }),
+  toggleApiKey: (id) => request("PATCH", `/api-keys/${id}/toggle`),
+  deleteApiKey: (id) => request("DELETE", `/api-keys/${id}`),
+
+  // Server Monitor
+  getMonitorServers: () => request("GET", "/monitor/servers"),
+  createMonitorServer: (data) => request("POST", "/monitor/servers", data),
+  updateMonitorServer: (id, data) =>
+    request("PUT", `/monitor/servers/${id}`, data),
+  deleteMonitorServer: (id) => request("DELETE", `/monitor/servers/${id}`),
+  getMonitorMetrics: () => request("GET", "/monitor/metrics"),
+  getServerMetrics: (id) => request("GET", `/monitor/servers/${id}/metrics`),
+  testMonitorServer: (id) => request("POST", `/monitor/servers/${id}/test`),
+
+  // SSH Keys
+  getSSHKeys: () => request("GET", "/monitor/ssh-keys"),
+  uploadSSHKey: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${API_BASE}/monitor/ssh-keys`, {
+      method: "POST",
+      headers: (() => {
+        const h = {};
+        const token = localStorage.getItem("token");
+        if (token) h["Authorization"] = `Bearer ${token}`;
+        const apiKey = localStorage.getItem("apiKey");
+        if (apiKey) h["X-API-Key"] = apiKey;
+        return h;
+      })(),
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Upload failed");
+    }
+    return res.json();
+  },
+  downloadSSHKey: (name) =>
+    `${API_BASE}/monitor/ssh-keys/${encodeURIComponent(name)}`,
+  deleteSSHKey: (name) =>
+    request("DELETE", `/monitor/ssh-keys/${encodeURIComponent(name)}`),
 };
 
 export default api;

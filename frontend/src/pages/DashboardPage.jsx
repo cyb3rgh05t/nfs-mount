@@ -4,12 +4,19 @@ import {
   Cpu,
   HardDrive,
   MemoryStick,
+  LayoutDashboard,
   Network,
   Shield,
   GitMerge,
   Server,
+  RefreshCw,
+  Plus,
+  Download,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/client";
+import { useCachedState } from "../hooks/useCache";
+import InfoBox from "../components/InfoBox";
 
 function StatCard({ icon: Icon, label, value, sub, color = "nfs-primary" }) {
   const colorMap = {
@@ -54,24 +61,35 @@ function formatUptime(seconds) {
 }
 
 export default function DashboardPage() {
-  const [status, setStatus] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [nfsStatus, setNfsStatus] = useState([]);
-  const [mergerStatus, setMergerStatus] = useState([]);
+  const navigate = useNavigate();
+  const [status, setStatus] = useCachedState("dash-status", null);
+  const [stats, setStats] = useCachedState("dash-stats", null);
+  const [nfsStatus, setNfsStatus] = useCachedState("dash-nfs", []);
+  const [mergerStatus, setMergerStatus] = useCachedState("dash-merger", []);
+  const [vpnStatus, setVpnStatus] = useCachedState("dash-vpn", []);
+  const [kernelParams, setKernelParams] = useCachedState("dash-kernel", []);
+  const [rpsXps, setRpsXps] = useCachedState("dash-rpsxps", null);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [st, sys, nfs, merger] = await Promise.all([
+      const [st, sys, nfs, merger, vpn, kp, rps] = await Promise.all([
         api.getSystemStatus(),
         api.getSystemStats(),
         api.getNFSStatus().catch(() => []),
         api.getMergerFSStatus().catch(() => []),
+        api.getAllVPNStatus().catch(() => []),
+        api.getKernelParams().catch(() => []),
+        api.getRpsXps().catch(() => null),
       ]);
       setStatus(st);
       setStats(sys);
       setNfsStatus(nfs);
       setMergerStatus(merger);
+      setVpnStatus(vpn);
+      setKernelParams(kp);
+      setRpsXps(rps);
       setError("");
     } catch (e) {
       setError(e.message);
@@ -88,15 +106,54 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-emerald-500/10">
+            <LayoutDashboard className="w-5 h-5 text-nfs-primary" />
+          </div>
           Dashboard
         </h1>
-        <div className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border rounded-lg">
-          <div
-            className={`w-2 h-2 rounded-full ${status ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`}
-          />
-          <span className="text-sm text-nfs-muted">
-            {status ? "System Online" : "Connecting..."}
-          </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/nfs/client")}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <Download className="w-4 h-4 text-nfs-primary" />
+            NFS Mount
+          </button>
+          <button
+            onClick={() => navigate("/mergerfs")}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <GitMerge className="w-4 h-4 text-nfs-primary" />
+            MergerFS
+          </button>
+          <button
+            onClick={() => navigate("/vpn")}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <Shield className="w-4 h-4 text-nfs-primary" />
+            VPN
+          </button>
+          <button
+            onClick={async () => {
+              setRefreshing(true);
+              await fetchData();
+              setRefreshing(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-nfs-primary ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </button>
+          <div className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border rounded-lg">
+            <div
+              className={`w-2 h-2 rounded-full ${status ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`}
+            />
+            <span className="text-sm text-nfs-muted">
+              {status ? "System Online" : "Connecting..."}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -159,7 +216,7 @@ export default function DashboardPage() {
             </span>
           </div>
           {nfsStatus.length === 0 ? (
-            <p className="text-nfs-muted text-sm">No NFS mounts configured</p>
+            <InfoBox type="warning">No NFS mounts configured</InfoBox>
           ) : (
             <div className="space-y-2">
               {nfsStatus.map((m) => (
@@ -211,9 +268,9 @@ export default function DashboardPage() {
             </span>
           </div>
           {mergerStatus.length === 0 ? (
-            <p className="text-nfs-muted text-sm">
+            <InfoBox type="warning">
               No MergerFS configs configured
-            </p>
+            </InfoBox>
           ) : (
             <div className="space-y-2">
               {mergerStatus.map((c) => (
@@ -252,19 +309,38 @@ export default function DashboardPage() {
               <Shield className="w-4 h-4 text-emerald-400" />
             </div>
             <h2 className="text-lg font-semibold text-white">VPN Status</h2>
-          </div>
-          <div className="flex items-center gap-2 bg-nfs-input/50 rounded-lg px-4 py-3">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                status?.vpn_active
-                  ? "bg-emerald-400 animate-pulse"
-                  : "bg-nfs-muted"
-              }`}
-            />
-            <span className="text-sm text-nfs-text">
-              WireGuard: {status?.vpn_active ? "Connected" : "Not active"}
+            <span className="ml-auto text-xs text-nfs-muted">
+              {vpnStatus.filter((v) => v.is_active).length} / {vpnStatus.length} active
             </span>
           </div>
+          {vpnStatus.length === 0 ? (
+            <InfoBox type="warning">No VPN tunnels configured</InfoBox>
+          ) : (
+            <div className="space-y-2">
+              {vpnStatus.map((v) => (
+                <InfoBox
+                  key={v.id}
+                  type={v.is_active ? "success" : "warning"}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        v.is_active
+                          ? "bg-emerald-400 animate-pulse"
+                          : "bg-amber-400"
+                      }`}
+                    />
+                    <span className="font-medium">{v.name}</span>
+                    <span className="opacity-60">·</span>
+                    <span className="opacity-60 capitalize">{v.vpn_type}</span>
+                    <span className="ml-auto">
+                      {v.is_active ? "Connected" : "Not active"}
+                    </span>
+                  </div>
+                </InfoBox>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
@@ -275,11 +351,81 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold text-white">
               Streaming Optimization
             </h2>
+            {kernelParams.length > 0 && (
+              <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Active
+              </span>
+            )}
           </div>
-          <p className="text-sm text-nfs-muted leading-relaxed">
-            Kernel tuning active for 300+ simultaneous streams. NFS nconnect=16,
-            1MB R/W Buffer.
-          </p>
+
+          {/* Kernel Tuning */}
+          {(() => {
+            const getParam = (name) => kernelParams.find((p) => p.name === name)?.value;
+            const congestion = getParam("net.ipv4.tcp_congestion_control");
+            const slotTable = getParam("sunrpc.tcp_max_slot_table_entries");
+            const rmemMax = getParam("net.core.rmem_max");
+            const wmemMax = getParam("net.core.wmem_max");
+            const qdisc = getParam("net.core.default_qdisc");
+            const dirtyRatio = getParam("vm.dirty_ratio");
+            const cachePress = getParam("vm.vfs_cache_pressure");
+
+            const isBBR = congestion === "bbr";
+            const isHighSlots = slotTable && parseInt(slotTable) >= 128;
+            const isHighBuf = rmemMax && parseInt(rmemMax) >= 16777216;
+            const rpsActive = rpsXps && rpsXps.rps_cpus && rpsXps.rps_cpus !== "0" && rpsXps.rps_cpus !== "00";
+            const xpsActive = rpsXps && rpsXps.xps_cpus && rpsXps.xps_cpus !== "0" && rpsXps.xps_cpus !== "00";
+
+            const Badge = ({ active, label }) => (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                  active
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : "bg-red-500/15 text-red-400 border-red-500/30"
+                }`}
+              >
+                <span className={`w-1 h-1 rounded-full ${active ? "bg-emerald-400" : "bg-red-400"}`} />
+                {label}
+              </span>
+            );
+
+            return (
+              <div className="space-y-3">
+                {kernelParams.length === 0 ? (
+                  <InfoBox type="warning">No kernel tuning data available</InfoBox>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">Kernel Tuning</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge active={isBBR} label={congestion ? `TCP ${congestion.toUpperCase()}` : "TCP Not Set"} />
+                        <Badge active={isHighSlots} label={slotTable ? `NFS Slots ${slotTable}` : "NFS Slots Not Set"} />
+                        <Badge active={isHighBuf} label={rmemMax ? `Buffer ${(parseInt(rmemMax) / 1048576)}MB` : "Buffer Not Set"} />
+                        <Badge active={!!qdisc} label={qdisc ? `QDisc ${qdisc}` : "QDisc Not Set"} />
+                        <Badge active={dirtyRatio && parseInt(dirtyRatio) >= 30} label={dirtyRatio ? `Dirty ${dirtyRatio}%` : "Dirty Not Set"} />
+                        <Badge active={cachePress && parseInt(cachePress) <= 50} label={cachePress ? `Cache Press ${cachePress}` : "Cache Press Not Set"} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">CPU Load Balancing</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge active={rpsActive} label={`RPS ${rpsActive ? "Enabled" : "Disabled"}`} />
+                        <Badge active={xpsActive} label={`XPS ${xpsActive ? "Enabled" : "Disabled"}`} />
+                        {rpsXps && (
+                          <>
+                            <Badge active={true} label={`${rpsXps.cpu_count} CPUs`} />
+                            <Badge active={!!rpsXps.interface} label={rpsXps.interface || "No Interface"} />
+                            <Badge active={rpsXps.mtu && parseInt(rpsXps.mtu) >= 9000} label={rpsXps.mtu ? `MTU ${rpsXps.mtu}` : "MTU Not Set"} />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>

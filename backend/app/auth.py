@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 import logging
 import secrets
@@ -43,18 +44,39 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ):
     from .models.user import User
+    from .models.api_key import APIKey
 
-    # Try API key first (backward compat) – constant-time comparison
-    if (
-        api_key
-        and settings.api_key
-        and secrets.compare_digest(api_key, settings.api_key)
-    ):
-        result = await db.execute(select(User).where(User.is_admin == True).limit(1))
-        user = result.scalar_one_or_none()
-        if user:
-            logger.debug("Authenticated via API key as user: %s", user.username)
-            return user
+    # Try API key first – check database keys
+    if api_key:
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        result = await db.execute(
+            select(APIKey).where(APIKey.key_hash == key_hash, APIKey.is_active == True)
+        )
+        db_key = result.scalar_one_or_none()
+        if db_key:
+            user = await db.get(User, db_key.user_id)
+            if user and user.is_active:
+                # Update last_used_at
+                db_key.last_used_at = datetime.now(timezone.utc)
+                await db.commit()
+                logger.debug(
+                    "Authenticated via DB API key '%s' as user: %s",
+                    db_key.name,
+                    user.username,
+                )
+                return user
+
+        # Fallback: legacy env-var API key
+        if settings.api_key and secrets.compare_digest(api_key, settings.api_key):
+            result = await db.execute(
+                select(User).where(User.is_admin == True).limit(1)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                logger.debug(
+                    "Authenticated via legacy API key as user: %s", user.username
+                )
+                return user
 
     # Try JWT token
     if not token:

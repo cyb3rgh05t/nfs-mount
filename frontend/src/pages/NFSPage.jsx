@@ -17,6 +17,7 @@ import {
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
+import Toggle from "../components/Toggle";
 
 const DEFAULT_MOUNT_OPTIONS =
   "vers=4.2,proto=tcp,hard,nconnect=16,rsize=1048576,wsize=1048576,async,noatime,nocto,ac,actimeo=3600";
@@ -433,28 +434,16 @@ function MountsTab() {
             />
           </Field>
           <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.auto_mount}
-                onChange={(e) =>
-                  setForm({ ...form, auto_mount: e.target.checked })
-                }
-                className="rounded border-nfs-border"
-              />
-              Auto-Mount
-            </label>
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) =>
-                  setForm({ ...form, enabled: e.target.checked })
-                }
-                className="rounded border-nfs-border"
-              />
-              Enabled
-            </label>
+            <Toggle
+              checked={form.auto_mount}
+              onChange={(val) => setForm({ ...form, auto_mount: val })}
+              label="Auto-Mount"
+            />
+            <Toggle
+              checked={form.enabled}
+              onChange={(val) => setForm({ ...form, enabled: val })}
+              label="Enabled"
+            />
           </div>
           <div className="flex justify-end gap-3">
             <button
@@ -826,17 +815,11 @@ function ExportsTab() {
             />
           </Field>
           <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) =>
-                  setForm({ ...form, enabled: e.target.checked })
-                }
-                className="rounded border-nfs-border"
-              />
-              Enabled
-            </label>
+            <Toggle
+              checked={form.enabled}
+              onChange={(val) => setForm({ ...form, enabled: val })}
+              label="Enabled"
+            />
           </div>
           <div className="flex justify-end gap-3">
             <button

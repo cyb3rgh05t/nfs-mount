@@ -3,12 +3,12 @@ import { useAuth } from "./context/AuthContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
-import NFSPage from "./pages/NFSPage";
+import NFSClientPage from "./pages/NFSClientPage";
+import NFSExportsPage from "./pages/NFSExportsPage";
 import MergerFSPage from "./pages/MergerFSPage";
 import SettingsPage from "./pages/SettingsPage";
 import VPNPage from "./pages/VPNPage";
-import UsersPage from "./pages/UsersPage";
-import DocsPage from "./pages/DocsPage";
+import ServerMonitorPage from "./pages/ServerMonitorPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -47,12 +47,16 @@ export default function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/nfs" element={<NFSPage />} />
+                <Route path="/nfs/client" element={<NFSClientPage />} />
+                <Route path="/nfs/exports" element={<NFSExportsPage />} />
+                <Route
+                  path="/nfs"
+                  element={<Navigate to="/nfs/client" replace />}
+                />
                 <Route path="/mergerfs" element={<MergerFSPage />} />
                 <Route path="/vpn" element={<VPNPage />} />
-                <Route path="/users" element={<UsersPage />} />
+                <Route path="/monitor" element={<ServerMonitorPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/docs" element={<DocsPage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

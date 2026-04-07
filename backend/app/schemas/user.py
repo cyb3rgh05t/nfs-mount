@@ -30,10 +30,18 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = None
     display_name: Optional[str] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None
+
+    @field_validator("username")
+    @classmethod
+    def username_valid(cls, v):
+        if v is not None and len(v) < 3:
+            raise ValueError("Username must be at least 3 characters")
+        return v.lower().strip() if v else v
 
 
 class UserResponse(BaseModel):

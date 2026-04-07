@@ -12,11 +12,21 @@ from sqlalchemy import select, func
 from .database import engine, Base, async_session
 from .logging_config import setup_logging
 from .middleware import RequestLoggingMiddleware
-from .routers import nfs, mergerfs, system, notifications, auth, vpn
+from .routers import (
+    nfs,
+    mergerfs,
+    system,
+    notifications,
+    auth,
+    vpn,
+    api_keys,
+    server_monitor,
+)
 from .services.nfs_service import auto_mount_nfs
 from .services.mergerfs_service import auto_mount_mergerfs
 from .services.vpn_service import auto_connect_vpn
 from .services.notification_service import send_alert
+from .services.system_service import auto_apply_saved_settings
 from .models.user import User
 from .auth import hash_password
 from .config import settings
@@ -55,6 +65,13 @@ async def lifespan(app: FastAPI):
 
     # Create default admin if needed
     await create_default_admin()
+
+    # Auto-apply saved kernel & RPS/XPS settings from DB
+    try:
+        async with async_session() as db:
+            await auto_apply_saved_settings(db)
+    except Exception as e:
+        logger.error(f"Auto-apply saved system settings failed: {e}")
 
     # Auto-mount configured mounts
     try:
@@ -106,9 +123,11 @@ async def health_check():
 
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(api_keys.router, prefix="/api/api-keys", tags=["API Keys"])
 app.include_router(nfs.router, prefix="/api/nfs", tags=["NFS"])
 app.include_router(mergerfs.router, prefix="/api/mergerfs", tags=["MergerFS"])
 app.include_router(vpn.router, prefix="/api/vpn", tags=["VPN"])
+app.include_router(server_monitor.router, prefix="/api/monitor", tags=["Monitor"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(
     notifications.router, prefix="/api/notifications", tags=["Notifications"]

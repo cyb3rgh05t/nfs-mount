@@ -26,6 +26,7 @@ services:
       - "/dev/fuse:/dev/fuse"
     volumes:
       - "/opt/appdata/nfs-mount/data:/data"
+      - "/opt/appdata/nfs-mount/ssh:/config/ssh:ro"
       - "/mnt:/mnt:rshared"
     labels:
       - "dockupdater.enable=true"

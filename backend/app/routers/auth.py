@@ -85,6 +85,16 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if data.username is not None:
+        # Check uniqueness
+        existing = await db.execute(
+            select(User).where(
+                User.username == data.username, User.id != current_user.id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Username already taken")
+        current_user.username = data.username
     if data.display_name is not None:
         current_user.display_name = data.display_name
     # Users can't change their own admin/active status via this endpoint
@@ -164,6 +174,13 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if data.username is not None:
+        existing = await db.execute(
+            select(User).where(User.username == data.username, User.id != user_id)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Username already taken")
+        user.username = data.username
     if data.display_name is not None:
         user.display_name = data.display_name
     if data.password is not None:

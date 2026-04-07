@@ -11,10 +11,12 @@ const ICONS = {
 };
 
 const COLORS = {
-  success: "bg-green-600/90 border-green-500",
-  error: "bg-red-600/90 border-red-500",
-  info: "bg-blue-600/90 border-blue-500",
-  warning: "bg-yellow-600/90 border-yellow-500",
+  success:
+    "bg-emerald-950/90 backdrop-blur-md border-emerald-500/40 text-emerald-400",
+  error: "bg-red-950/90 backdrop-blur-md border-red-500/40 text-red-400",
+  info: "bg-blue-950/90 backdrop-blur-md border-blue-500/40 text-blue-400",
+  warning:
+    "bg-amber-950/90 backdrop-blur-md border-amber-500/40 text-amber-400",
 };
 
 let toastId = 0;
@@ -55,13 +57,13 @@ export function ToastProvider({ children }) {
           return (
             <div
               key={t.id}
-              className={`flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg text-white text-sm animate-slide-in ${COLORS[t.type]}`}
+              className={`flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg text-sm animate-slide-in ${COLORS[t.type]}`}
             >
               <Icon className="w-5 h-5 shrink-0 mt-0.5" />
-              <span className="flex-1">{t.message}</span>
+              <span className="flex-1 text-nfs-text">{t.message}</span>
               <button
                 onClick={() => removeToast(t.id)}
-                className="shrink-0 hover:opacity-70"
+                className="shrink-0 text-nfs-muted hover:text-white transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>

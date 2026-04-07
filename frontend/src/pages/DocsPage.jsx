@@ -1,4 +1,5 @@
 import { useState } from "react";
+import InfoBox from "../components/InfoBox";
 import {
   BookOpen,
   HardDrive,
@@ -62,19 +63,6 @@ function CodeBlock({ children }) {
     <pre className="bg-nfs-input border border-nfs-border rounded-lg p-4 text-xs text-nfs-text font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
       {children}
     </pre>
-  );
-}
-
-function InfoBox({ type = "info", children }) {
-  const styles = {
-    info: "bg-blue-500/10 border-blue-500/30 text-blue-400",
-    warning: "bg-amber-500/10 border-amber-500/30 text-amber-400",
-    success: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400",
-  };
-  return (
-    <div className={`p-3 rounded-lg border text-sm ${styles[type]}`}>
-      {children}
-    </div>
   );
 }
 

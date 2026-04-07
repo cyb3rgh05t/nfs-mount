@@ -1,8 +1,20 @@
 import { useState, useEffect } from "react";
-import { GitMerge, Plus, Play, Square, Trash2, Edit3, X } from "lucide-react";
+import {
+  GitMerge,
+  Plus,
+  Play,
+  Square,
+  Trash2,
+  Edit3,
+  X,
+  RefreshCw,
+} from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
+import { useCachedState } from "../hooks/useCache";
+import InfoBox from "../components/InfoBox";
+import Toggle from "../components/Toggle";
 
 const DEFAULT_OPTIONS =
   "rw,async_read=true,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=auto-full,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,minfreespace=10G,fsname=mergerfs";
@@ -41,12 +53,13 @@ const inputClass =
   "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
 
 export default function MergerFSPage() {
-  const [configs, setConfigs] = useState([]);
-  const [statuses, setStatuses] = useState({});
+  const [configs, setConfigs] = useCachedState("mergerfs-configs", []);
+  const [statuses, setStatuses] = useCachedState("mergerfs-statuses", {});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const [form, setForm] = useState({
@@ -183,18 +196,33 @@ export default function MergerFSPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-500/10">
-            <GitMerge className="w-5 h-5 text-purple-400" />
+          <div className="p-2 rounded-lg bg-nfs-primary/10 text-nfs-primary">
+            <GitMerge className="w-5 h-5" />
           </div>
           MergerFS
         </h1>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Config
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <Plus className="w-4 h-4 text-nfs-primary" />
+            New Config
+          </button>
+          <button
+            onClick={async () => {
+              setRefreshing(true);
+              await fetchData();
+              setRefreshing(false);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-nfs-primary ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -210,23 +238,22 @@ export default function MergerFSPage() {
       )}
 
       {/* Info Box */}
-      <div className="bg-nfs-card border border-purple-500/20 rounded-xl p-4 mb-6">
-        <p className="text-xs text-nfs-muted leading-relaxed">
-          MergerFS combines multiple storage paths into a single mount.
-          Optimized with full file caching, readdir cache, 120s attribute
-          caching for maximum streaming performance.
-        </p>
-      </div>
+      <InfoBox type="primary" className="mb-6">
+        MergerFS combines multiple storage paths into a single mount. Optimized
+        with full file caching, readdir cache, 120s attribute caching for
+        maximum streaming performance.
+      </InfoBox>
 
       {configs.length === 0 ? (
-        <div className="text-center py-16 text-nfs-muted">
-          <GitMerge className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No MergerFS configs available</p>
+        <div className="bg-nfs-card border border-nfs-border rounded-xl p-12 text-center">
+          <GitMerge className="w-12 h-12 text-nfs-muted mx-auto mb-4 opacity-30" />
+          <p className="text-nfs-muted mb-4">No MergerFS configs available</p>
           <button
             onClick={openCreate}
-            className="mt-3 text-nfs-primary hover:text-nfs-primary-hover text-sm"
+            className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all mx-auto"
           >
-            Create one now →
+            <Plus className="w-4 h-4 text-nfs-primary" />
+            Create Config
           </button>
         </div>
       ) : (
@@ -369,37 +396,27 @@ export default function MergerFSPage() {
             />
           </Field>
           <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.auto_mount}
-                onChange={(e) =>
-                  setForm({ ...form, auto_mount: e.target.checked })
-                }
-              />
-              Auto-Mount
-            </label>
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) =>
-                  setForm({ ...form, enabled: e.target.checked })
-                }
-              />
-              Enabled
-            </label>
+            <Toggle
+              checked={form.auto_mount}
+              onChange={(val) => setForm({ ...form, auto_mount: val })}
+              label="Auto-Mount"
+            />
+            <Toggle
+              checked={form.enabled}
+              onChange={(val) => setForm({ ...form, enabled: val })}
+              label="Enabled"
+            />
           </div>
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-muted text-nfs-text rounded-lg text-sm transition-all"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 bg-nfs-primary hover:bg-nfs-primary-hover text-black font-medium rounded-lg text-sm transition-colors"
+              className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
             >
               {editing ? "Save" : "Create"}
             </button>

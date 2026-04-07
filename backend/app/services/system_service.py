@@ -1,9 +1,14 @@
 import asyncio
+import glob
 import os
 import subprocess
 import logging
 
 import psutil
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..models.system_setting import SystemSetting
 
 logger = logging.getLogger("nfs-manager.service.system")
 
@@ -128,6 +133,10 @@ def get_kernel_params() -> list[dict]:
         "net.core.wmem_max",
         "net.core.rmem_default",
         "net.core.wmem_default",
+        "net.core.default_qdisc",
+        "net.ipv4.tcp_congestion_control",
+        "net.ipv4.tcp_rmem",
+        "net.ipv4.tcp_wmem",
         "vm.dirty_ratio",
         "vm.dirty_background_ratio",
         "vm.vfs_cache_pressure",
@@ -144,8 +153,10 @@ def get_kernel_params() -> list[dict]:
     return result
 
 
-async def apply_kernel_tuning(params: list[dict]) -> list[dict]:
-    """Apply kernel tuning parameters."""
+async def apply_kernel_tuning(
+    params: list[dict], db: AsyncSession | None = None
+) -> list[dict]:
+    """Apply kernel tuning parameters and optionally save to DB."""
     results = []
     for p in params:
         name = p["name"]
@@ -159,13 +170,21 @@ async def apply_kernel_tuning(params: list[dict]) -> list[dict]:
             continue
 
         result = await _run(["sysctl", "-w", f"{name}={value}"])
+        success = result.returncode == 0
         results.append(
             {
                 "name": name,
-                "success": result.returncode == 0,
-                "error": result.stderr.strip() if result.returncode != 0 else None,
+                "success": success,
+                "error": result.stderr.strip() if not success else None,
             }
         )
+
+        # Save to DB if apply succeeded
+        if success and db is not None:
+            await _save_setting(db, "kernel", name, value)
+
+    if db is not None:
+        await db.commit()
     return results
 
 
@@ -207,3 +226,247 @@ def count_active_mounts(mount_type: str = "nfs") -> int:
     except Exception:
         pass
     return count
+
+
+def get_docker_info() -> dict:
+    """Get Docker version and container info."""
+    info: dict = {
+        "docker_version": "N/A",
+        "container_id": "N/A",
+        "image": "N/A",
+        "os": "N/A",
+        "arch": "N/A",
+        "running_in_docker": False,
+    }
+
+    # Check if running inside Docker
+    info["running_in_docker"] = os.path.isfile("/.dockerenv") or os.path.isfile(
+        "/run/.containerenv"
+    )
+
+    # Docker version
+    try:
+        result = subprocess.run(
+            ["docker", "--version"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            info["docker_version"] = result.stdout.strip()
+    except Exception:
+        pass
+
+    # OS info
+    try:
+        import platform
+
+        info["os"] = f"{platform.system()} {platform.release()}"
+        info["arch"] = platform.machine()
+    except Exception:
+        pass
+
+    # Container ID from cgroup
+    try:
+        with open("/proc/self/cgroup", "r") as f:
+            for line in f:
+                if "docker" in line or "containerd" in line:
+                    parts = line.strip().split("/")
+                    if parts:
+                        cid = parts[-1][:12]
+                        if len(cid) == 12:
+                            info["container_id"] = cid
+                    break
+    except Exception:
+        pass
+
+    # Container hostname (usually the short container ID)
+    if info["container_id"] == "N/A":
+        try:
+            hostname = os.environ.get("HOSTNAME", "")
+            if hostname and len(hostname) >= 12:
+                info["container_id"] = hostname[:12]
+        except Exception:
+            pass
+
+    # Image from env (set in Dockerfile via ENV)
+    info["image"] = os.environ.get("DOCKER_IMAGE", "N/A")
+
+    return info
+
+
+# ── Persistent Settings helpers ──────────────────────────────────────────────
+
+
+async def _save_setting(db: AsyncSession, category: str, key: str, value: str):
+    """Upsert a single system setting."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.value = value
+        setting.category = category
+    else:
+        db.add(SystemSetting(category=category, key=key, value=value))
+
+
+async def load_saved_kernel_params(db: AsyncSession) -> list[dict]:
+    """Load kernel params saved in DB."""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.category == "kernel")
+    )
+    return [{"name": s.key, "value": s.value} for s in result.scalars().all()]
+
+
+async def load_saved_rpsxps(db: AsyncSession) -> dict:
+    """Load RPS/XPS settings saved in DB."""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.category == "rpsxps")
+    )
+    return {s.key: s.value for s in result.scalars().all()}
+
+
+async def auto_apply_saved_settings(db: AsyncSession):
+    """Apply all saved kernel + RPS/XPS settings (called at startup)."""
+    # Kernel params
+    saved = await load_saved_kernel_params(db)
+    if saved:
+        logger.info("Auto-applying %d saved kernel parameters...", len(saved))
+        results = await apply_kernel_tuning(saved)
+        ok = sum(1 for r in results if r["success"])
+        fail = sum(1 for r in results if not r["success"])
+        logger.info("Kernel params: %d applied, %d failed", ok, fail)
+
+    # RPS/XPS
+    rpsxps = await load_saved_rpsxps(db)
+    if rpsxps:
+        logger.info("Auto-applying saved RPS/XPS settings...")
+        rps_result = await apply_rps_xps(rpsxps)
+        if rps_result.get("success"):
+            logger.info("RPS/XPS settings applied successfully")
+        else:
+            logger.warning("RPS/XPS apply: %s", rps_result.get("error", "unknown"))
+
+
+# ── RPS/XPS CPU Load Balancing ───────────────────────────────────────────────
+
+
+def _detect_primary_interface() -> str | None:
+    """Detect primary network interface (skip lo, docker, br-, veth, wg)."""
+    try:
+        result = subprocess.run(
+            ["ip", "-o", "link", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split(": ")
+            if len(parts) < 2:
+                continue
+            iface = parts[1].strip().split("@")[0]
+            if iface in ("lo",) or any(
+                iface.startswith(p) for p in ("docker", "br-", "veth", "wg")
+            ):
+                continue
+            return iface
+    except Exception:
+        pass
+    return None
+
+
+def get_rps_xps_info() -> dict:
+    """Read current RPS/XPS settings from sysfs."""
+    iface = _detect_primary_interface()
+    if not iface:
+        return {
+            "interface": None,
+            "cpu_count": os.cpu_count() or 1,
+            "rps_cpus": "N/A",
+            "xps_cpus": "N/A",
+            "mtu": "N/A",
+        }
+
+    cpu_count = os.cpu_count() or 1
+
+    # Read RPS mask from first rx queue
+    rps_cpus = "N/A"
+    rps_files = sorted(glob.glob(f"/sys/class/net/{iface}/queues/rx-*/rps_cpus"))
+    if rps_files:
+        try:
+            with open(rps_files[0]) as f:
+                rps_cpus = f.read().strip()
+        except Exception:
+            pass
+
+    # Read XPS mask from first tx queue
+    xps_cpus = "N/A"
+    xps_files = sorted(glob.glob(f"/sys/class/net/{iface}/queues/tx-*/xps_cpus"))
+    if xps_files:
+        try:
+            with open(xps_files[0]) as f:
+                xps_cpus = f.read().strip()
+        except Exception:
+            pass
+
+    # Read MTU
+    mtu = "N/A"
+    try:
+        with open(f"/sys/class/net/{iface}/mtu") as f:
+            mtu = f.read().strip()
+    except Exception:
+        pass
+
+    return {
+        "interface": iface,
+        "cpu_count": cpu_count,
+        "rps_cpus": rps_cpus,
+        "xps_cpus": xps_cpus,
+        "mtu": mtu,
+    }
+
+
+async def apply_rps_xps(settings: dict, db: AsyncSession | None = None) -> dict:
+    """Apply RPS/XPS settings. settings keys: rps_cpus, xps_cpus, mtu."""
+    iface = _detect_primary_interface()
+    if not iface:
+        return {"success": False, "error": "No primary network interface found"}
+
+    errors = []
+
+    # Apply RPS
+    rps_mask = settings.get("rps_cpus")
+    if rps_mask:
+        rps_files = glob.glob(f"/sys/class/net/{iface}/queues/rx-*/rps_cpus")
+        for path in rps_files:
+            try:
+                with open(path, "w") as f:
+                    f.write(rps_mask)
+            except Exception as e:
+                errors.append(f"RPS {path}: {e}")
+
+    # Apply XPS
+    xps_mask = settings.get("xps_cpus")
+    if xps_mask:
+        xps_files = glob.glob(f"/sys/class/net/{iface}/queues/tx-*/xps_cpus")
+        for path in xps_files:
+            try:
+                with open(path, "w") as f:
+                    f.write(xps_mask)
+            except Exception as e:
+                errors.append(f"XPS {path}: {e}")
+
+    # Apply MTU
+    mtu = settings.get("mtu")
+    if mtu:
+        result = await _run(["ip", "link", "set", "dev", iface, "mtu", str(mtu)])
+        if result.returncode != 0:
+            errors.append(f"MTU: {result.stderr.strip()}")
+
+    # Save to DB
+    if db is not None:
+        for key in ("rps_cpus", "xps_cpus", "mtu"):
+            val = settings.get(key)
+            if val:
+                await _save_setting(db, "rpsxps", key, str(val))
+        await db.commit()
+
+    if errors:
+        return {"success": False, "error": "; ".join(errors)}
+    return {"success": True}
