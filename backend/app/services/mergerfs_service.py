@@ -49,16 +49,23 @@ async def mount_mergerfs(config: MergerFSConfig) -> dict:
     )
     options = config.options or "rw,use_ino,allow_other"
 
-    os.makedirs(mount_point, exist_ok=True)
-    for src in sources:
-        os.makedirs(src, exist_ok=True)
-
-    # Unmount if already mounted
+    # Unmount if already mounted (do this BEFORE makedirs to avoid stale mount issues)
     if is_mounted(mount_point):
         logger.info(f"Unmounting existing MergerFS at {mount_point}")
         result = await _run(["fusermount", "-u", mount_point])
         if result.returncode != 0:
             await _run(["umount", "-l", mount_point])
+
+    # Create directories (after unmounting stale mounts)
+    try:
+        os.makedirs(mount_point, exist_ok=True)
+    except FileExistsError:
+        # Path exists as a stale/broken mount point — try lazy unmount then create
+        logger.warning(f"Stale mount detected at {mount_point}, force unmounting")
+        await _run(["umount", "-l", mount_point])
+        os.makedirs(mount_point, exist_ok=True)
+    for src in sources:
+        os.makedirs(src, exist_ok=True)
 
     source_str = ":".join(sources)
     logger.info(f"Mounting MergerFS {source_str} -> {mount_point}")

@@ -57,12 +57,18 @@ async def mount_nfs(mount: NFSMount) -> dict:
     remote = f"{mount.server_ip}:{mount.remote_path}"
     options = mount.options or "vers=4.2,proto=tcp,hard"
 
-    os.makedirs(local, exist_ok=True)
-
     # Unmount first if already mounted (clean remount)
     if is_mounted(local):
         logger.info(f"Unmounting existing NFS at {local}")
         await _run(["umount", "-l", local])
+
+    # Create directory (after unmounting stale mounts)
+    try:
+        os.makedirs(local, exist_ok=True)
+    except FileExistsError:
+        logger.warning(f"Stale mount detected at {local}, force unmounting")
+        await _run(["umount", "-l", local])
+        os.makedirs(local, exist_ok=True)
 
     logger.info(f"Mounting NFS {remote} -> {local}")
     result = await _run(["mount", "-t", "nfs", "-o", options, remote, local])
