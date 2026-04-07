@@ -28,6 +28,10 @@ async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess
         return subprocess.CompletedProcess(
             cmd, returncode=127, stdout="", stderr=f"Command not found: {cmd[0]}"
         )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            cmd, returncode=-1, stdout="", stderr=f"Command timed out after {timeout}s"
+        )
 
 
 def _get_interface_name(config: VPNConfig) -> str:

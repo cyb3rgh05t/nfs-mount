@@ -15,13 +15,17 @@ logger = logging.getLogger("nfs-manager")
 
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: subprocess.run(cmd, capture_output=True, text=True, timeout=timeout),
-    )
-
-
-def is_mounted(path: str) -> bool:
+    try:
+        return await loop.run_in_executor(
+            None,
+            lambda: subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            ),
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            cmd, returncode=-1, stdout="", stderr=f"Command timed out after {timeout}s"
+        )
     try:
         result = subprocess.run(
             ["mountpoint", "-q", path], capture_output=True, timeout=5
