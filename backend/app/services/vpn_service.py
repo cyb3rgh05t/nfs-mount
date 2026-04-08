@@ -67,14 +67,40 @@ def _get_interface_name(config: VPNConfig) -> str:
     return f"ovpn{config.id}"
 
 
+def _strip_wg_dns(config_content: str) -> str:
+    """Strip DNS lines from WireGuard config.
+
+    When running in host network mode, wg-quick's DNS handling modifies
+    /etc/resolv.conf for the entire host, breaking DNS resolution for
+    all other services. The VPN tunnel still works for routing without
+    the VPN provider's DNS servers.
+    """
+    lines = config_content.splitlines(keepends=True)
+    filtered = []
+    removed = []
+    for line in lines:
+        stripped = line.strip().lower()
+        if stripped.startswith("dns") and "=" in stripped:
+            removed.append(line.strip())
+        else:
+            filtered.append(line)
+    if removed:
+        logger.info(
+            f"Stripped DNS from WireGuard config to protect host DNS: {removed}"
+        )
+    return "".join(filtered)
+
+
 def _write_config_file(config: VPNConfig) -> str:
     """Write config content to filesystem. Returns file path."""
     if config.vpn_type == "wireguard":
         os.makedirs(WG_CONF_DIR, exist_ok=True)
         iface = _get_interface_name(config)
         path = os.path.join(WG_CONF_DIR, f"{iface}.conf")
+        # Strip DNS to prevent wg-quick from hijacking host DNS resolution
+        content = _strip_wg_dns(config.config_content)
         with open(path, "w") as f:
-            f.write(config.config_content)
+            f.write(content)
         os.chmod(path, 0o600)
         return path
     else:
@@ -193,22 +219,70 @@ def _has_full_tunnel(config_content: str) -> bool:
     return False
 
 
-def _add_route_protection(config: VPNConfig):
-    """Add routing protection to prevent server lockout when VPN routes all traffic.
+def _set_rp_filter_loose():
+    """Set reverse path filtering to loose mode on all physical interfaces.
 
-    Creates a dedicated routing table (PROTECT_TABLE) with a copy of the
-    original default gateway and local subnet routes. Policy routing rules
-    ensure traffic originating from the host's real IPs always uses this
-    table instead of the VPN tunnel.
+    With strict rp_filter (1), the kernel drops incoming packets if the
+    reverse route (to the source) would use a different interface than the
+    one the packet arrived on. When a VPN adds a default route through the
+    tunnel, the kernel thinks responses should go via the VPN interface --
+    so it drops legitimate incoming packets on the physical interface.
 
-    This is more robust than pointing to 'table main' because wg-quick or
-    OpenVPN may replace or suppress the main table's default route.
+    Loose mode (2) only checks that ANY route to the source exists, which
+    is always true. This is the critical fix for server reachability.
     """
-    if not _has_full_tunnel(config.config_content):
-        logger.info(
-            f"No full tunnel detected for {config.name} – skipping route protection"
+    try:
+        subprocess.run(
+            ["sysctl", "-w", "net.ipv4.conf.all.rp_filter=2"],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        return []
+        subprocess.run(
+            ["sysctl", "-w", "net.ipv4.conf.default.rp_filter=2"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        # Also set on each physical interface explicitly
+        result = subprocess.run(
+            ["ip", "-o", "link", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split(": ")
+                if len(parts) >= 2:
+                    dev = parts[1].split("@")[0]
+                    if dev != "lo" and not dev.startswith(("wg", "ovpn", "tun", "tap")):
+                        subprocess.run(
+                            ["sysctl", "-w", f"net.ipv4.conf.{dev}.rp_filter=2"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        )
+        logger.info("Set rp_filter=2 (loose) on all interfaces")
+    except Exception as e:
+        logger.warning(f"Failed to set rp_filter: {e}")
+
+
+def _add_route_protection(config: VPNConfig):
+    """Add routing protection to prevent server lockout when VPN is connected.
+
+    ALWAYS applied for every VPN connection because:
+    - OpenVPN servers can push redirect-gateway that isn't in the client config
+    - WireGuard AllowedIPs patterns can vary
+    - There is zero downside to having protection when it's not strictly needed
+
+    Three layers of protection:
+    1. rp_filter=2 — prevents kernel from dropping incoming packets
+    2. Dedicated routing table with original gateway — survives VPN route changes
+    3. Policy routing rules — ensures host-originated traffic bypasses VPN
+    """
+    # Layer 1: Fix reverse path filtering BEFORE anything else
+    _set_rp_filter_loose()
 
     gw_ip, gw_dev = _get_default_gateway()
     if not gw_ip or not gw_dev:
@@ -294,9 +368,6 @@ def _add_route_protection(config: VPNConfig):
 
 def _remove_route_protection(config: VPNConfig):
     """Remove policy routing rules and flush the protection table."""
-    if not _has_full_tunnel(config.config_content):
-        return
-
     host_ips = _get_host_ips()
     for ip in host_ips:
         try:
@@ -383,9 +454,6 @@ async def disconnect_vpn(config: VPNConfig) -> dict:
     """Disconnect a VPN tunnel."""
     iface = _get_interface_name(config)
 
-    # Remove route protection before disconnect (routes no longer needed after tunnel is down)
-    _remove_route_protection(config)
-
     if config.vpn_type == "wireguard":
         result = await _run(["wg-quick", "down", iface])
     else:
@@ -400,6 +468,9 @@ async def disconnect_vpn(config: VPNConfig) -> dict:
                 pass
         except FileNotFoundError:
             result = await _run(["killall", f"openvpn"])
+
+    # Remove route protection AFTER VPN is down (normal routing is restored)
+    _remove_route_protection(config)
 
     if result.returncode != 0:
         logger.warning(f"VPN disconnect warning: {result.stderr}")
@@ -497,8 +568,45 @@ async def _get_openvpn_status(config: VPNConfig, iface: str) -> dict:
     }
 
 
+def cleanup_stale_route_protection():
+    """Remove any stale route protection from previous runs.
+
+    Called on startup to ensure a clean routing state before any VPN
+    connections are made. This handles the case where the container was
+    restarted while a VPN was active.
+    """
+    # Remove all rules pointing to our protection table
+    removed = 0
+    for _ in range(50):  # safety limit
+        result = subprocess.run(
+            ["ip", "rule", "del", "table", PROTECT_TABLE, "priority", "10"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            break
+        removed += 1
+
+    # Flush the protection routing table
+    subprocess.run(
+        ["ip", "route", "flush", "table", PROTECT_TABLE],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    if removed > 0:
+        logger.info(
+            f"Cleaned up {removed} stale route protection rule(s) from previous run"
+        )
+
+
 async def auto_connect_vpn():
     """Auto-connect VPN tunnels on startup."""
+    # Clean up stale protection rules from previous container run
+    cleanup_stale_route_protection()
+
     async with async_session() as session:
         result = await session.execute(
             select(VPNConfig).where(
