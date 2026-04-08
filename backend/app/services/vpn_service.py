@@ -184,8 +184,25 @@ async def connect_vpn(config: VPNConfig) -> dict:
         logger.error(f"VPN connect failed ({config.vpn_type}): {result.stderr}")
         return {"success": False, "error": result.stderr.strip(), "name": config.name}
 
+    # Try to get tunnel IP for the notification
+    tunnel_ip = ""
+    try:
+        ip_result = await _run(["ip", "-4", "addr", "show", iface])
+        for line in ip_result.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("inet "):
+                tunnel_ip = line.split()[1].split("/")[0]
+                break
+    except Exception:
+        pass
+
     logger.info(f"VPN connected: {config.name} ({config.vpn_type}) on {iface}")
-    return {"success": True, "name": config.name}
+    return {
+        "success": True,
+        "name": config.name,
+        "interface": iface,
+        "ip": tunnel_ip,
+    }
 
 
 async def disconnect_vpn(config: VPNConfig) -> dict:

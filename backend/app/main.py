@@ -87,7 +87,18 @@ async def lifespan(app: FastAPI):
         if mounted > 0 or failed > 0:
             msg = f"Auto-mount: **{mounted}** successful, **{failed}** failed"
             status = "STARTUP" if failed == 0 else "ERROR"
-            await send_alert(status, msg)
+            nfs_ok = sum(1 for r in nfs_results if r["success"])
+            nfs_fail = sum(1 for r in nfs_results if not r["success"])
+            mergerfs_ok = sum(1 for r in mergerfs_results if r["success"])
+            mergerfs_fail = sum(1 for r in mergerfs_results if not r["success"])
+            vpn_ok = sum(1 for r in vpn_results if r["success"])
+            vpn_fail = sum(1 for r in vpn_results if not r["success"])
+            details = {
+                "NFS Mounts": f"{nfs_ok} OK / {nfs_fail} Failed",
+                "MergerFS": f"{mergerfs_ok} OK / {mergerfs_fail} Failed",
+                "VPN": f"{vpn_ok} OK / {vpn_fail} Failed",
+            }
+            await send_alert(status, msg, details)
     except Exception as e:
         logger.error(f"Auto-mount failed: {e}")
 

@@ -94,9 +94,19 @@ async def mount_nfs(mount_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="NFS mount not found")
     logger.info("Mounting NFS: %s (id=%d)", mount.name, mount.id)
     result = await nfs_service.mount_nfs(mount)
+    mount_details = {
+        "Server": mount.server_ip,
+        "Remote Path": mount.remote_path,
+        "Local Path": mount.local_path,
+        "NFS Version": mount.nfs_version,
+    }
     if result["success"]:
         logger.info("NFS mount successful: %s", mount.name)
-        await send_alert("SUCCESS", f"NFS Mount **{mount.name}** mounted successfully")
+        await send_alert(
+            "SUCCESS",
+            f"NFS Mount **{mount.name}** mounted successfully",
+            mount_details,
+        )
     else:
         logger.error(
             "NFS mount failed: %s – %s", mount.name, result.get("error", "Unknown")
@@ -104,6 +114,7 @@ async def mount_nfs(mount_id: int, db: AsyncSession = Depends(get_db)):
         await send_alert(
             "ERROR",
             f"NFS Mount **{mount.name}** failed: {result.get('error', 'Unknown')}",
+            mount_details,
         )
     return result
 
@@ -117,7 +128,14 @@ async def unmount_nfs(mount_id: int, db: AsyncSession = Depends(get_db)):
     result = await nfs_service.unmount_nfs(mount.local_path)
     if result["success"]:
         logger.info("NFS unmount successful: %s", mount.name)
-        await send_alert("INFO", f"NFS Mount **{mount.name}** unmounted")
+        await send_alert(
+            "INFO",
+            f"NFS Mount **{mount.name}** unmounted",
+            {
+                "Server": mount.server_ip,
+                "Local Path": mount.local_path,
+            },
+        )
     return result
 
 
@@ -233,9 +251,19 @@ async def enable_export(export_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="NFS export not found")
     logger.info("Enabling NFS export: %s (id=%d)", export.name, export.id)
     result = await nfs_export_service.enable_export(export, db)
+    export_details = {
+        "Export Path": export.export_path,
+        "Allowed Hosts": export.allowed_hosts,
+        "Options": export.options,
+        "NFS Version": export.nfs_version,
+    }
     if result["success"]:
         logger.info("NFS export enabled: %s", export.name)
-        await send_alert("SUCCESS", f"NFS Export **{export.name}** enabled")
+        await send_alert(
+            "SUCCESS",
+            f"NFS Export **{export.name}** enabled",
+            export_details,
+        )
     else:
         logger.error(
             "NFS export enable failed: %s – %s",
@@ -245,6 +273,7 @@ async def enable_export(export_id: int, db: AsyncSession = Depends(get_db)):
         await send_alert(
             "ERROR",
             f"NFS Export **{export.name}** failed: {result.get('error', 'Unknown')}",
+            export_details,
         )
     return result
 
@@ -258,7 +287,14 @@ async def disable_export(export_id: int, db: AsyncSession = Depends(get_db)):
     result = await nfs_export_service.disable_export(export, db)
     if result["success"]:
         logger.info("NFS export disabled: %s", export.name)
-        await send_alert("INFO", f"NFS Export **{export.name}** disabled")
+        await send_alert(
+            "INFO",
+            f"NFS Export **{export.name}** disabled",
+            {
+                "Export Path": export.export_path,
+                "Allowed Hosts": export.allowed_hosts,
+            },
+        )
     return result
 
 
@@ -293,9 +329,15 @@ async def apply_all_exports(db: AsyncSession = Depends(get_db)):
         res = await db.execute(
             select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
         )
-        for exp in res.scalars().all():
+        enabled_exports = list(res.scalars().all())
+        for exp in enabled_exports:
             exp.is_active = True
         await db.commit()
         logger.info("All NFS exports applied successfully")
-        await send_alert("SUCCESS", "All NFS exports applied")
+        paths = ", ".join(e.export_path for e in enabled_exports) or "none"
+        await send_alert(
+            "SUCCESS",
+            "All NFS exports applied",
+            {"Exports": str(len(enabled_exports)), "Paths": paths},
+        )
     return result

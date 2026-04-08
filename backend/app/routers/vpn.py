@@ -84,19 +84,31 @@ async def connect_vpn(config_id: int, db: AsyncSession = Depends(get_db)):
         "Connecting VPN: %s (id=%d, type=%s)", config.name, config.id, config.vpn_type
     )
     result = await vpn_service.connect_vpn(config)
+    vpn_details = {
+        "Name": config.name,
+        "Type": config.vpn_type.upper(),
+    }
     if result["success"]:
         config.is_active = True
         await db.commit()
         logger.info("VPN connected: %s", config.name)
+        if result.get("interface"):
+            vpn_details["Interface"] = result["interface"]
+        if result.get("ip"):
+            vpn_details["Tunnel IP"] = result["ip"]
         await send_alert(
-            "SUCCESS", f"VPN **{config.name}** ({config.vpn_type}) connected"
+            "SUCCESS",
+            f"VPN **{config.name}** ({config.vpn_type}) connected",
+            vpn_details,
         )
     else:
         logger.error(
             "VPN connect failed: %s – %s", config.name, result.get("error", "Unknown")
         )
         await send_alert(
-            "ERROR", f"VPN **{config.name}** error: {result.get('error', 'Unknown')}"
+            "ERROR",
+            f"VPN **{config.name}** error: {result.get('error', 'Unknown')}",
+            vpn_details,
         )
     return result
 
@@ -112,7 +124,11 @@ async def disconnect_vpn(config_id: int, db: AsyncSession = Depends(get_db)):
         config.is_active = False
         await db.commit()
         logger.info("VPN disconnected: %s", config.name)
-        await send_alert("INFO", f"VPN **{config.name}** disconnected")
+        await send_alert(
+            "INFO",
+            f"VPN **{config.name}** disconnected",
+            {"Type": config.vpn_type.upper()},
+        )
     return result
 
 

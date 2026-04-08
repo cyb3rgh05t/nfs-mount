@@ -124,9 +124,21 @@ async def mount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="MergerFS config not found")
     logger.info("Mounting MergerFS: %s (id=%d)", config.name, config.id)
     result = await mergerfs_service.mount_mergerfs(config)
+    try:
+        sources_list = json.loads(config.sources)
+    except Exception:
+        sources_list = [config.sources]
+    mergerfs_details = {
+        "Mount Point": config.mount_point,
+        "Sources": ", ".join(sources_list),
+    }
     if result["success"]:
         logger.info("MergerFS mount successful: %s", config.name)
-        await send_alert("SUCCESS", f"MergerFS **{config.name}** mounted successfully")
+        await send_alert(
+            "SUCCESS",
+            f"MergerFS **{config.name}** mounted successfully",
+            mergerfs_details,
+        )
     else:
         logger.error(
             "MergerFS mount failed: %s – %s",
@@ -136,6 +148,7 @@ async def mount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
         await send_alert(
             "ERROR",
             f"MergerFS **{config.name}** failed: {result.get('error', 'Unknown')}",
+            mergerfs_details,
         )
     return result
 
@@ -149,7 +162,11 @@ async def unmount_mergerfs(config_id: int, db: AsyncSession = Depends(get_db)):
     result = await mergerfs_service.unmount_mergerfs(config.mount_point)
     if result["success"]:
         logger.info("MergerFS unmount successful: %s", config.name)
-        await send_alert("INFO", f"MergerFS **{config.name}** unmounted")
+        await send_alert(
+            "INFO",
+            f"MergerFS **{config.name}** unmounted",
+            {"Mount Point": config.mount_point},
+        )
     return result
 
 

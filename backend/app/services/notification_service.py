@@ -60,7 +60,9 @@ async def _get_configs() -> list:
     return configs
 
 
-async def send_discord(webhook_url: str, status: str, message: str):
+async def send_discord(
+    webhook_url: str, status: str, message: str, details: dict | None = None
+):
     """Send a Discord notification via webhook."""
     color_map = {
         "STARTUP": 3066993,
@@ -81,20 +83,23 @@ async def send_discord(webhook_url: str, status: str, message: str):
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
+    fields = [
+        {"name": "**Status**", "value": f"`{status}`", "inline": True},
+        {"name": "**Server**", "value": "`NFS-Manager`", "inline": True},
+    ]
+    if details:
+        # Add a blank inline field to force a new row
+        fields.append({"name": "\u200b", "value": "\u200b", "inline": True})
+        for key, value in details.items():
+            fields.append({"name": f"**{key}**", "value": f"`{value}`", "inline": True})
+
     payload = {
         "embeds": [
             {
                 "title": f"{emoji} NFS-MergerFS Manager",
                 "description": f"**Meldung:** _{message}_",
                 "color": color,
-                "fields": [
-                    {"name": "**Status**", "value": f"`{status}`", "inline": True},
-                    {
-                        "name": "**Server**",
-                        "value": f"`NFS-Manager`",
-                        "inline": True,
-                    },
-                ],
+                "fields": fields,
                 "footer": {"text": f"System Monitor \u2022 {now}"},
             }
         ]
@@ -109,7 +114,12 @@ async def send_discord(webhook_url: str, status: str, message: str):
 
 
 async def send_telegram(
-    token: str, chat_id: str, topic_id: str, status: str, message: str
+    token: str,
+    chat_id: str,
+    topic_id: str,
+    status: str,
+    message: str,
+    details: dict | None = None,
 ):
     """Send a Telegram notification."""
     emoji_map = {
@@ -122,12 +132,20 @@ async def send_telegram(
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%H:%M:%S | %d.%m.%Y")
 
+    detail_lines = ""
+    if details:
+        detail_lines = "\n".join(
+            f"<b>{key}:</b> <code>{value}</code>" for key, value in details.items()
+        )
+        detail_lines = f"\n{detail_lines}\n"
+
     text = (
         f"<b>{emoji} NFS-MergerFS Manager</b>\n"
         f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
         f"<b>Status:</b> <code>{status}</code>\n"
         f"<b>Server:</b> <code>NFS-Manager</code>\n\n"
-        f"<b>Meldung:</b>\n<i>{message}</i>\n\n"
+        f"<b>Meldung:</b>\n<i>{message}</i>\n"
+        f"{detail_lines}\n"
         f"<code>{now}</code>"
     )
 
@@ -148,14 +166,14 @@ async def send_telegram(
             logger.error(f"Telegram notification failed: {e}")
 
 
-async def send_alert(status: str, message: str):
+async def send_alert(status: str, message: str, details: dict | None = None):
     """Send alert to all configured notification channels."""
     configs = await _get_configs()
 
     for cfg in configs:
         if cfg.type == "discord" and cfg.webhook_url:
-            await send_discord(cfg.webhook_url, status, message)
+            await send_discord(cfg.webhook_url, status, message, details)
         elif cfg.type == "telegram" and cfg.bot_token and cfg.chat_id:
             await send_telegram(
-                cfg.bot_token, cfg.chat_id, cfg.topic_id, status, message
+                cfg.bot_token, cfg.chat_id, cfg.topic_id, status, message, details
             )
