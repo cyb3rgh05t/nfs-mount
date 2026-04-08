@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import logging
 import os
 import re
@@ -11,6 +12,11 @@ from ..database import async_session
 from ..models.vpn_config import VPNConfig
 
 logger = logging.getLogger("nfs-manager.service.vpn")
+
+# Dedicated routing table for VPN lockout protection.
+# Using a separate table (instead of "main") ensures the original default
+# gateway is preserved even if wg-quick or OpenVPN replaces the main route.
+PROTECT_TABLE = "200"
 
 WG_CONF_DIR = "/etc/wireguard"
 OVPN_CONF_DIR = "/etc/openvpn"
@@ -34,10 +40,6 @@ def _validate_vpn_config(config: VPNConfig):
                 f"OpenVPN config contains blocked directive: '{directive}'. "
                 "Script execution directives are not allowed."
             )
-
-
-WG_CONF_DIR = "/etc/wireguard"
-OVPN_CONF_DIR = "/etc/openvpn"
 
 
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -140,35 +142,144 @@ def _get_host_ips():
     return ips
 
 
+def _get_host_subnets():
+    """Get all non-loopback IPv4 subnets (CIDR) and their devices."""
+    subnets = []
+    try:
+        result = subprocess.run(
+            ["ip", "-4", "addr", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            current_dev = None
+            for line in result.stdout.split("\n"):
+                # Lines like "2: eth0: <BROADCAST..."
+                if not line.startswith(" "):
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        current_dev = parts[1].strip().split("@")[0]
+                line = line.strip()
+                if line.startswith("inet ") and current_dev:
+                    addr_cidr = line.split()[1]  # e.g. "192.168.1.100/24"
+                    ip_str, prefix = addr_cidr.split("/")
+                    if not ip_str.startswith("127."):
+                        net = ipaddress.ip_network(f"{ip_str}/{prefix}", strict=False)
+                        subnets.append((str(net), current_dev))
+    except Exception:
+        pass
+    return subnets
+
+
 def _has_full_tunnel(config_content: str) -> bool:
-    """Check if a VPN config routes all traffic (0.0.0.0/0)."""
-    return "0.0.0.0/0" in config_content or "redirect-gateway" in config_content
+    """Check if a VPN config routes all traffic through the tunnel.
+
+    Detects multiple common patterns:
+    - WireGuard AllowedIPs = 0.0.0.0/0
+    - OpenVPN redirect-gateway directive
+    - Split-tunnel trick using 0.0.0.0/1 + 128.0.0.0/1 (two /1 routes)
+    """
+    content = config_content
+    content_lower = content.lower()
+
+    if "0.0.0.0/0" in content:
+        return True
+    if "redirect-gateway" in content_lower:
+        return True
+    # Two /1 routes together cover the entire IPv4 space
+    if "0.0.0.0/1" in content and "128.0.0.0/1" in content:
+        return True
+    return False
 
 
 def _add_route_protection(config: VPNConfig):
-    """Add policy routing rules to prevent lockout when VPN routes all traffic.
+    """Add routing protection to prevent server lockout when VPN routes all traffic.
 
-    Uses 'ip rule from <ip> table main' so that all traffic originating
-    from any of the host's real IPs is routed through the real default
-    gateway instead of the VPN tunnel. This protects SSH and management
-    access for both public servers and NATted/private servers.
+    Creates a dedicated routing table (PROTECT_TABLE) with a copy of the
+    original default gateway and local subnet routes. Policy routing rules
+    ensure traffic originating from the host's real IPs always uses this
+    table instead of the VPN tunnel.
+
+    This is more robust than pointing to 'table main' because wg-quick or
+    OpenVPN may replace or suppress the main table's default route.
     """
     if not _has_full_tunnel(config.config_content):
+        logger.info(
+            f"No full tunnel detected for {config.name} – skipping route protection"
+        )
+        return []
+
+    gw_ip, gw_dev = _get_default_gateway()
+    if not gw_ip or not gw_dev:
+        logger.warning("No default gateway found – cannot add route protection")
         return []
 
     host_ips = _get_host_ips()
+    if not host_ips:
+        logger.warning("No host IPs detected – cannot add route protection")
+        return []
+
     protected = []
 
+    # 1. Copy the current default route into our protection table
+    res = subprocess.run(
+        [
+            "ip",
+            "route",
+            "replace",
+            "default",
+            "via",
+            gw_ip,
+            "dev",
+            gw_dev,
+            "table",
+            PROTECT_TABLE,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    if res.returncode == 0:
+        logger.info(
+            f"Protection table {PROTECT_TABLE}: default via {gw_ip} dev {gw_dev}"
+        )
+    else:
+        logger.warning(f"Failed to set protection default route: {res.stderr}")
+
+    # 2. Copy connected subnet routes so local-network traffic also works
+    for subnet, dev in _get_host_subnets():
+        subprocess.run(
+            ["ip", "route", "replace", subnet, "dev", dev, "table", PROTECT_TABLE],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        logger.info(f"Protection table {PROTECT_TABLE}: {subnet} dev {dev}")
+
+    # 3. Add policy routing rules for each host IP → protection table
     for ip in host_ips:
         try:
             result = subprocess.run(
-                ["ip", "rule", "add", "from", ip, "table", "main", "priority", "10"],
+                [
+                    "ip",
+                    "rule",
+                    "add",
+                    "from",
+                    ip,
+                    "table",
+                    PROTECT_TABLE,
+                    "priority",
+                    "10",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
             if result.returncode == 0:
-                logger.info(f"Route protection rule added: from {ip} table main")
+                logger.info(
+                    f"Route protection rule added: from {ip} table {PROTECT_TABLE}"
+                )
                 protected.append(ip)
             elif "RTNETLINK answers: File exists" in result.stderr:
                 logger.info(f"Rule for {ip} already exists, skipping")
@@ -182,7 +293,7 @@ def _add_route_protection(config: VPNConfig):
 
 
 def _remove_route_protection(config: VPNConfig):
-    """Remove policy routing rules added for host IP protection."""
+    """Remove policy routing rules and flush the protection table."""
     if not _has_full_tunnel(config.config_content):
         return
 
@@ -190,7 +301,17 @@ def _remove_route_protection(config: VPNConfig):
     for ip in host_ips:
         try:
             subprocess.run(
-                ["ip", "rule", "del", "from", ip, "table", "main", "priority", "10"],
+                [
+                    "ip",
+                    "rule",
+                    "del",
+                    "from",
+                    ip,
+                    "table",
+                    PROTECT_TABLE,
+                    "priority",
+                    "10",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -198,6 +319,18 @@ def _remove_route_protection(config: VPNConfig):
             logger.info(f"Route protection rule removed: {ip}")
         except Exception:
             pass
+
+    # Flush the protection routing table
+    try:
+        subprocess.run(
+            ["ip", "route", "flush", "table", PROTECT_TABLE],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        logger.info(f"Protection table {PROTECT_TABLE} flushed")
+    except Exception:
+        pass
 
 
 async def connect_vpn(config: VPNConfig) -> dict:
