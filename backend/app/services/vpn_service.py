@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import json
 import logging
 import os
 import re
@@ -14,9 +15,17 @@ from ..models.vpn_config import VPNConfig
 logger = logging.getLogger("nfs-manager.service.vpn")
 
 # Dedicated routing table for VPN lockout protection.
-# Using a separate table (instead of "main") ensures the original default
-# gateway is preserved even if wg-quick or OpenVPN replaces the main route.
 PROTECT_TABLE = "200"
+# Firewall mark for incoming-connection protection (connmark)
+PROTECT_MARK = "0x100/0x100"
+PROTECT_MARK_VALUE = "0x100"
+# iptables chain for our rules (easy cleanup)
+PROTECT_CHAIN = "NFS_VPN_PROTECT"
+# File to persist gateway info across container restarts
+GATEWAY_CACHE_FILE = "/data/vpn_gateway.json"
+
+# In-memory cache of gateway info per VPN id
+_vpn_gateway_cache: dict[int, tuple[str, str]] = {}
 
 WG_CONF_DIR = "/etc/wireguard"
 OVPN_CONF_DIR = "/etc/openvpn"
@@ -67,28 +76,65 @@ def _get_interface_name(config: VPNConfig) -> str:
     return f"ovpn{config.id}"
 
 
-def _strip_wg_dns(config_content: str) -> str:
-    """Strip DNS lines from WireGuard config.
+def _prepare_wg_config(config_content: str) -> str:
+    """Prepare WireGuard config for safe use in host network mode.
 
-    When running in host network mode, wg-quick's DNS handling modifies
-    /etc/resolv.conf for the entire host, breaking DNS resolution for
-    all other services. The VPN tunnel still works for routing without
-    the VPN provider's DNS servers.
+    - Strips DNS lines (prevents wg-quick from hijacking host /etc/resolv.conf)
+    - Adds Table = off (prevents wg-quick from managing routing — we do it ourselves)
     """
     lines = config_content.splitlines(keepends=True)
     filtered = []
-    removed = []
+    removed_dns = []
+    has_table = False
+    in_interface = True  # first section is always [Interface]
+
     for line in lines:
         stripped = line.strip().lower()
-        if stripped.startswith("dns") and "=" in stripped:
-            removed.append(line.strip())
-        else:
-            filtered.append(line)
-    if removed:
-        logger.info(
-            f"Stripped DNS from WireGuard config to protect host DNS: {removed}"
-        )
+
+        # Track sections
+        if stripped.startswith("[") and not stripped.startswith("[interface"):
+            # Leaving [Interface] section — inject Table=off if not present
+            if in_interface and not has_table:
+                filtered.append("Table = off\n")
+                has_table = True
+            in_interface = False
+
+        # Strip DNS
+        if in_interface and stripped.startswith("dns") and "=" in stripped:
+            removed_dns.append(line.strip())
+            continue
+
+        # Replace existing Table directive with off
+        if in_interface and stripped.startswith("table") and "=" in stripped:
+            filtered.append("Table = off\n")
+            has_table = True
+            continue
+
+        filtered.append(line)
+
+    # If config only has [Interface] section (no [Peer] yet)
+    if in_interface and not has_table:
+        filtered.append("Table = off\n")
+
+    if removed_dns:
+        logger.info(f"Stripped DNS from WireGuard config: {removed_dns}")
+    logger.info("Injected Table = off into WireGuard config")
+
     return "".join(filtered)
+
+
+def _extract_wg_endpoint(config_content: str) -> str | None:
+    """Extract endpoint IP from WireGuard config."""
+    for line in config_content.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("endpoint") and "=" in stripped:
+            val = stripped.split("=", 1)[1].strip()
+            # Endpoint = 69.16.145.215:51820
+            host = val.rsplit(":", 1)[0]
+            # Handle IPv6 [addr]:port format
+            host = host.strip("[]")
+            return host
+    return None
 
 
 def _write_config_file(config: VPNConfig) -> str:
@@ -97,8 +143,8 @@ def _write_config_file(config: VPNConfig) -> str:
         os.makedirs(WG_CONF_DIR, exist_ok=True)
         iface = _get_interface_name(config)
         path = os.path.join(WG_CONF_DIR, f"{iface}.conf")
-        # Strip DNS to prevent wg-quick from hijacking host DNS resolution
-        content = _strip_wg_dns(config.config_content)
+        # Prepare config: strip DNS, add Table=off
+        content = _prepare_wg_config(config.config_content)
         with open(path, "w") as f:
             f.write(content)
         os.chmod(path, 0o600)
@@ -199,57 +245,35 @@ def _get_host_subnets():
 
 
 def _has_full_tunnel(config_content: str) -> bool:
-    """Check if a VPN config routes all traffic through the tunnel.
-
-    Detects multiple common patterns:
-    - WireGuard AllowedIPs = 0.0.0.0/0
-    - OpenVPN redirect-gateway directive
-    - Split-tunnel trick using 0.0.0.0/1 + 128.0.0.0/1 (two /1 routes)
-    """
-    content = config_content
-    content_lower = content.lower()
-
-    if "0.0.0.0/0" in content:
+    """Check if a VPN config routes all traffic through the tunnel."""
+    content_lower = config_content.lower()
+    if "0.0.0.0/0" in config_content:
         return True
     if "redirect-gateway" in content_lower:
         return True
-    # Two /1 routes together cover the entire IPv4 space
-    if "0.0.0.0/1" in content and "128.0.0.0/1" in content:
+    if "0.0.0.0/1" in config_content and "128.0.0.0/1" in config_content:
         return True
     return False
 
 
 def _set_rp_filter_loose():
-    """Set reverse path filtering to loose mode on all physical interfaces.
+    """Set reverse path filtering to loose mode on all interfaces.
 
-    With strict rp_filter (1), the kernel drops incoming packets if the
-    reverse route (to the source) would use a different interface than the
-    one the packet arrived on. When a VPN adds a default route through the
-    tunnel, the kernel thinks responses should go via the VPN interface --
-    so it drops legitimate incoming packets on the physical interface.
-
-    Loose mode (2) only checks that ANY route to the source exists, which
-    is always true. This is the critical fix for server reachability.
+    Critical: with strict rp_filter, the kernel drops incoming packets
+    when the reverse route goes through a different interface (the VPN).
     """
     try:
         subprocess.run(
             ["sysctl", "-w", "net.ipv4.conf.all.rp_filter=2"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
         subprocess.run(
             ["sysctl", "-w", "net.ipv4.conf.default.rp_filter=2"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
-        # Also set on each physical interface explicitly
         result = subprocess.run(
             ["ip", "-o", "link", "show"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
         if result.returncode == 0:
             for line in result.stdout.strip().split("\n"):
@@ -259,149 +283,221 @@ def _set_rp_filter_loose():
                     if dev != "lo" and not dev.startswith(("wg", "ovpn", "tun", "tap")):
                         subprocess.run(
                             ["sysctl", "-w", f"net.ipv4.conf.{dev}.rp_filter=2"],
-                            capture_output=True,
-                            text=True,
-                            timeout=5,
+                            capture_output=True, text=True, timeout=5,
                         )
         logger.info("Set rp_filter=2 (loose) on all interfaces")
     except Exception as e:
         logger.warning(f"Failed to set rp_filter: {e}")
 
 
-def _add_route_protection(config: VPNConfig):
-    """Add routing protection to prevent server lockout when VPN is connected.
+def _save_gateway_info(gw_ip: str, gw_dev: str):
+    """Persist gateway info so cleanup can work after container restart."""
+    try:
+        with open(GATEWAY_CACHE_FILE, "w") as f:
+            json.dump({"gw_ip": gw_ip, "gw_dev": gw_dev}, f)
+    except Exception:
+        pass
 
-    ALWAYS applied for every VPN connection because:
-    - OpenVPN servers can push redirect-gateway that isn't in the client config
-    - WireGuard AllowedIPs patterns can vary
-    - There is zero downside to having protection when it's not strictly needed
 
-    Three layers of protection:
-    1. rp_filter=2 — prevents kernel from dropping incoming packets
-    2. Dedicated routing table with original gateway — survives VPN route changes
-    3. Policy routing rules — ensures host-originated traffic bypasses VPN
+def _load_gateway_info() -> tuple[str | None, str | None]:
+    """Load persisted gateway info."""
+    try:
+        with open(GATEWAY_CACHE_FILE, "r") as f:
+            data = json.load(f)
+        return data.get("gw_ip"), data.get("gw_dev")
+    except Exception:
+        return None, None
+
+
+def _setup_iptables_connmark(gw_dev: str):
+    """Set up iptables connmark rules to protect incoming connections.
+
+    Marks incoming connections on the physical interface so that response
+    packets are routed via the original gateway instead of through the VPN.
+    New outgoing connections (e.g. NFS to remote servers) go through VPN.
     """
-    # Layer 1: Fix reverse path filtering BEFORE anything else
+    # Create our chain (ignore error if already exists)
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-N", PROTECT_CHAIN],
+        capture_output=True, text=True, timeout=5,
+    )
+    # Flush our chain (idempotent)
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-F", PROTECT_CHAIN],
+        capture_output=True, text=True, timeout=5,
+    )
+
+    # Rule 1: Mark connections entering on the physical interface
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-A", PROTECT_CHAIN,
+         "-i", gw_dev, "-j", "CONNMARK", "--set-mark", PROTECT_MARK],
+        capture_output=True, text=True, timeout=5,
+    )
+    # Rule 2: Restore connection mark to packet mark on outgoing packets
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-A", PROTECT_CHAIN,
+         "-m", "connmark", "--mark", PROTECT_MARK,
+         "-j", "MARK", "--set-mark", PROTECT_MARK],
+        capture_output=True, text=True, timeout=5,
+    )
+
+    # Hook our chain into PREROUTING and OUTPUT (check first to avoid duplicates)
+    for hook in ["PREROUTING", "OUTPUT"]:
+        check = subprocess.run(
+            ["iptables", "-t", "mangle", "-C", hook, "-j", PROTECT_CHAIN],
+            capture_output=True, text=True, timeout=5,
+        )
+        if check.returncode != 0:
+            subprocess.run(
+                ["iptables", "-t", "mangle", "-I", hook, "1", "-j", PROTECT_CHAIN],
+                capture_output=True, text=True, timeout=5,
+            )
+
+    logger.info(f"Connmark protection active on {gw_dev}")
+
+
+def _teardown_iptables_connmark():
+    """Remove all iptables connmark rules."""
+    # Unhook from PREROUTING and OUTPUT
+    for hook in ["PREROUTING", "OUTPUT"]:
+        for _ in range(5):  # remove all references
+            result = subprocess.run(
+                ["iptables", "-t", "mangle", "-D", hook, "-j", PROTECT_CHAIN],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode != 0:
+                break
+
+    # Flush and delete our chain
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-F", PROTECT_CHAIN],
+        capture_output=True, text=True, timeout=5,
+    )
+    subprocess.run(
+        ["iptables", "-t", "mangle", "-X", PROTECT_CHAIN],
+        capture_output=True, text=True, timeout=5,
+    )
+    logger.info("Connmark protection removed")
+
+
+def _setup_protection(gw_ip: str, gw_dev: str):
+    """Set up full network protection before VPN starts.
+
+    Three layers:
+    1. rp_filter=2 — prevents kernel from dropping incoming packets
+    2. Connmark — marks incoming connections, responses bypass VPN
+    3. Policy routing — marked packets use protection table with original gateway
+    """
+    # Layer 1: Reverse path filter
     _set_rp_filter_loose()
 
-    gw_ip, gw_dev = _get_default_gateway()
-    if not gw_ip or not gw_dev:
-        logger.warning("No default gateway found – cannot add route protection")
-        return []
-
-    host_ips = _get_host_ips()
-    if not host_ips:
-        logger.warning("No host IPs detected – cannot add route protection")
-        return []
-
-    protected = []
-
-    # 1. Copy the current default route into our protection table
-    res = subprocess.run(
-        [
-            "ip",
-            "route",
-            "replace",
-            "default",
-            "via",
-            gw_ip,
-            "dev",
-            gw_dev,
-            "table",
-            PROTECT_TABLE,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=5,
+    # Layer 2: Protection routing table with original gateway
+    subprocess.run(
+        ["ip", "route", "replace", "default", "via", gw_ip, "dev", gw_dev,
+         "table", PROTECT_TABLE],
+        capture_output=True, text=True, timeout=5,
     )
-    if res.returncode == 0:
-        logger.info(
-            f"Protection table {PROTECT_TABLE}: default via {gw_ip} dev {gw_dev}"
-        )
-    else:
-        logger.warning(f"Failed to set protection default route: {res.stderr}")
-
-    # 2. Copy connected subnet routes so local-network traffic also works
     for subnet, dev in _get_host_subnets():
         subprocess.run(
             ["ip", "route", "replace", subnet, "dev", dev, "table", PROTECT_TABLE],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
-        logger.info(f"Protection table {PROTECT_TABLE}: {subnet} dev {dev}")
+    logger.info(f"Protection table {PROTECT_TABLE}: default via {gw_ip} dev {gw_dev}")
 
-    # 3. Add policy routing rules for each host IP → protection table
-    for ip in host_ips:
-        try:
-            result = subprocess.run(
-                [
-                    "ip",
-                    "rule",
-                    "add",
-                    "from",
-                    ip,
-                    "table",
-                    PROTECT_TABLE,
-                    "priority",
-                    "10",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                logger.info(
-                    f"Route protection rule added: from {ip} table {PROTECT_TABLE}"
-                )
-                protected.append(ip)
-            elif "RTNETLINK answers: File exists" in result.stderr:
-                logger.info(f"Rule for {ip} already exists, skipping")
-                protected.append(ip)
-            else:
-                logger.warning(f"Failed to add rule for {ip}: {result.stderr}")
-        except Exception as e:
-            logger.warning(f"Route protection error for {ip}: {e}")
+    # Layer 3: Connmark (marks incoming connections on physical interface)
+    _setup_iptables_connmark(gw_dev)
 
-    return protected
+    # Layer 4: Route marked packets via protection table
+    # Delete any stale rule first
+    subprocess.run(
+        ["ip", "rule", "del", "fwmark", PROTECT_MARK_VALUE, "table", PROTECT_TABLE,
+         "priority", "10"],
+        capture_output=True, text=True, timeout=5,
+    )
+    result = subprocess.run(
+        ["ip", "rule", "add", "fwmark", PROTECT_MARK_VALUE, "table", PROTECT_TABLE,
+         "priority", "10"],
+        capture_output=True, text=True, timeout=5,
+    )
+    if result.returncode == 0:
+        logger.info(f"Policy routing: fwmark {PROTECT_MARK_VALUE} → table {PROTECT_TABLE}")
+    else:
+        logger.warning(f"Failed to add fwmark rule: {result.stderr}")
+
+    # Persist gateway info for cleanup after restart
+    _save_gateway_info(gw_ip, gw_dev)
 
 
-def _remove_route_protection(config: VPNConfig):
-    """Remove policy routing rules and flush the protection table."""
-    host_ips = _get_host_ips()
-    for ip in host_ips:
-        try:
-            subprocess.run(
-                [
-                    "ip",
-                    "rule",
-                    "del",
-                    "from",
-                    ip,
-                    "table",
-                    PROTECT_TABLE,
-                    "priority",
-                    "10",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            logger.info(f"Route protection rule removed: {ip}")
-        except Exception:
-            pass
+def _teardown_protection():
+    """Remove all protection (connmark, rules, routes)."""
+    # Remove fwmark rule
+    for _ in range(5):
+        result = subprocess.run(
+            ["ip", "rule", "del", "fwmark", PROTECT_MARK_VALUE, "table", PROTECT_TABLE,
+             "priority", "10"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            break
 
-    # Flush the protection routing table
-    try:
+    # Remove iptables connmark
+    _teardown_iptables_connmark()
+
+    # Flush protection routing table
+    subprocess.run(
+        ["ip", "route", "flush", "table", PROTECT_TABLE],
+        capture_output=True, text=True, timeout=5,
+    )
+    logger.info("All protection removed")
+
+
+def _setup_wg_routes(config: VPNConfig, iface: str, gw_ip: str, gw_dev: str):
+    """Set up routing after WireGuard interface is created (Table=off mode).
+
+    Since Table=off prevents wg-quick from managing routes, we add:
+    - Endpoint route via original gateway (keeps VPN tunnel reachable)
+    - 0.0.0.0/1 + 128.0.0.0/1 via VPN interface (catches all traffic)
+    The /1 routes are more specific than the /0 default, so all non-protected
+    traffic goes through VPN while the original default route stays intact.
+    """
+    # Route VPN endpoint through original gateway
+    endpoint = _extract_wg_endpoint(config.config_content)
+    if endpoint:
         subprocess.run(
-            ["ip", "route", "flush", "table", PROTECT_TABLE],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            ["ip", "route", "replace", f"{endpoint}/32", "via", gw_ip, "dev", gw_dev],
+            capture_output=True, text=True, timeout=5,
         )
-        logger.info(f"Protection table {PROTECT_TABLE} flushed")
-    except Exception:
-        pass
+        logger.info(f"Endpoint route: {endpoint} via {gw_ip} dev {gw_dev}")
+
+    # Route all traffic through VPN using /1 routes (more specific than default)
+    subprocess.run(
+        ["ip", "route", "replace", "0.0.0.0/1", "dev", iface],
+        capture_output=True, text=True, timeout=5,
+    )
+    subprocess.run(
+        ["ip", "route", "replace", "128.0.0.0/1", "dev", iface],
+        capture_output=True, text=True, timeout=5,
+    )
+    logger.info(f"VPN routes added: 0.0.0.0/1 + 128.0.0.0/1 dev {iface}")
+
+
+def _teardown_wg_routes(config: VPNConfig, iface: str):
+    """Remove VPN routes before WireGuard interface goes down."""
+    subprocess.run(
+        ["ip", "route", "del", "0.0.0.0/1", "dev", iface],
+        capture_output=True, text=True, timeout=5,
+    )
+    subprocess.run(
+        ["ip", "route", "del", "128.0.0.0/1", "dev", iface],
+        capture_output=True, text=True, timeout=5,
+    )
+    endpoint = _extract_wg_endpoint(config.config_content)
+    if endpoint:
+        subprocess.run(
+            ["ip", "route", "del", f"{endpoint}/32"],
+            capture_output=True, text=True, timeout=5,
+        )
+    logger.info(f"VPN routes removed for {iface}")
 
 
 async def connect_vpn(config: VPNConfig) -> dict:
@@ -414,17 +510,26 @@ async def connect_vpn(config: VPNConfig) -> dict:
         return {"success": False, "error": str(e), "name": config.name}
 
     iface = _get_interface_name(config)
+
+    # Save gateway BEFORE VPN changes anything
+    gw_ip, gw_dev = _get_default_gateway()
+    if gw_ip and gw_dev:
+        _vpn_gateway_cache[config.id] = (gw_ip, gw_dev)
+    else:
+        logger.warning("No default gateway found — VPN may cause lockout")
+
     _write_config_file(config)
 
-    # Protect host IPs from being routed through VPN (prevents lockout)
-    protected_ips = _add_route_protection(config)
-    if protected_ips:
-        logger.info(
-            f"Route protection active for {len(protected_ips)} IP(s) before starting {config.name}"
-        )
+    # Set up protection BEFORE starting VPN
+    if gw_ip and gw_dev:
+        _setup_protection(gw_ip, gw_dev)
 
     if config.vpn_type == "wireguard":
         result = await _run(["wg-quick", "up", iface])
+        # With Table=off, wg-quick brings up the interface but doesn't touch routing
+        # We manage routes ourselves
+        if result.returncode == 0 and gw_ip and gw_dev:
+            _setup_wg_routes(config, iface, gw_ip, gw_dev)
     else:
         conf_path = os.path.join(OVPN_CONF_DIR, f"{iface}.conf")
         result = await _run(
@@ -442,8 +547,9 @@ async def connect_vpn(config: VPNConfig) -> dict:
 
     if result.returncode != 0:
         logger.error(f"VPN connect failed ({config.vpn_type}): {result.stderr}")
-        # Clean up route protection on failure
-        _remove_route_protection(config)
+        # Clean up protection on failure
+        _teardown_protection()
+        _vpn_gateway_cache.pop(config.id, None)
         return {"success": False, "error": result.stderr.strip(), "name": config.name}
 
     logger.info(f"VPN connected: {config.name} ({config.vpn_type})")
@@ -454,7 +560,9 @@ async def disconnect_vpn(config: VPNConfig) -> dict:
     """Disconnect a VPN tunnel."""
     iface = _get_interface_name(config)
 
+    # For WireGuard: remove our manual routes BEFORE wg-quick down
     if config.vpn_type == "wireguard":
+        _teardown_wg_routes(config, iface)
         result = await _run(["wg-quick", "down", iface])
     else:
         pid_file = f"/run/openvpn-{iface}.pid"
@@ -469,8 +577,9 @@ async def disconnect_vpn(config: VPNConfig) -> dict:
         except FileNotFoundError:
             result = await _run(["killall", f"openvpn"])
 
-    # Remove route protection AFTER VPN is down (normal routing is restored)
-    _remove_route_protection(config)
+    # Remove protection AFTER VPN is down
+    _teardown_protection()
+    _vpn_gateway_cache.pop(config.id, None)
 
     if result.returncode != 0:
         logger.warning(f"VPN disconnect warning: {result.stderr}")
@@ -569,32 +678,51 @@ async def _get_openvpn_status(config: VPNConfig, iface: str) -> dict:
 
 
 def cleanup_stale_route_protection():
-    """Remove any stale route protection from previous runs.
+    """Remove any stale protection from previous runs.
 
-    Called on startup to ensure a clean routing state before any VPN
-    connections are made. This handles the case where the container was
-    restarted while a VPN was active.
+    Called on startup to ensure a clean routing/iptables state before any VPN
+    connections are made. Handles container restarts while VPN was active.
     """
-    # Remove all rules pointing to our protection table
+    # Remove fwmark rules
     removed = 0
-    for _ in range(50):  # safety limit
+    for _ in range(50):
         result = subprocess.run(
-            ["ip", "rule", "del", "table", PROTECT_TABLE, "priority", "10"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+            ["ip", "rule", "del", "fwmark", PROTECT_MARK_VALUE, "table", PROTECT_TABLE,
+             "priority", "10"],
+            capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0:
             break
         removed += 1
 
-    # Flush the protection routing table
+    # Also remove any old-style from-ip rules (from previous code versions)
+    for _ in range(50):
+        result = subprocess.run(
+            ["ip", "rule", "del", "table", PROTECT_TABLE, "priority", "10"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            break
+        removed += 1
+
+    # Remove stale /1 VPN routes from main table
+    subprocess.run(
+        ["ip", "route", "del", "0.0.0.0/1"],
+        capture_output=True, text=True, timeout=5,
+    )
+    subprocess.run(
+        ["ip", "route", "del", "128.0.0.0/1"],
+        capture_output=True, text=True, timeout=5,
+    )
+
+    # Flush protection routing table
     subprocess.run(
         ["ip", "route", "flush", "table", PROTECT_TABLE],
-        capture_output=True,
-        text=True,
-        timeout=5,
+        capture_output=True, text=True, timeout=5,
     )
+
+    # Clean up iptables
+    _teardown_iptables_connmark()
 
     if removed > 0:
         logger.info(
