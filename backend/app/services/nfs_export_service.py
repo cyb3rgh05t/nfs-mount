@@ -30,11 +30,21 @@ def _get_exports_path() -> str:
     return EXPORTS_FILE
 
 
+def _nsenter_prefix() -> list[str]:
+    """Return nsenter prefix to run commands in the host's full namespace.
+
+    Uses mount (-m), PID (-p), network (-n) and IPC (-i) namespaces so
+    that tools like exportfs can access the host's /var/lib/nfs/etab,
+    rpcbind socket, and kernel NFS interfaces.
+    """
+    return ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--"]
+
+
 def _exportfs_cmd(args: list[str]) -> list[str]:
-    """Build an exportfs command, using nsenter into the host mount namespace
+    """Build an exportfs command, using nsenter into the host namespaces
     when running in a privileged container."""
     if os.path.isfile(HOST_EXPORTS_FILE):
-        return ["nsenter", "-t", "1", "-m", "--", "exportfs"] + args
+        return _nsenter_prefix() + ["exportfs"] + args
     return ["exportfs"] + args
 
 
@@ -264,58 +274,85 @@ async def get_active_exports() -> list[str]:
     return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
 
 
-def get_system_exports() -> list[dict]:
-    """Parse /etc/exports and return non-managed entries (manual exports)."""
-    exports_path = _get_exports_path()
-    if not os.path.isfile(exports_path):
-        return []
+def _parse_exports_lines(lines, source: str = "system") -> list[dict]:
+    """Parse export lines and return structured entries, skipping managed block."""
     entries = []
     in_managed = False
-    try:
-        with open(exports_path, "r") as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped == MANAGED_BEGIN:
-                    in_managed = True
+    for line in lines:
+        stripped = line.strip()
+        if stripped == MANAGED_BEGIN:
+            in_managed = True
+            continue
+        if stripped == MANAGED_END:
+            in_managed = False
+            continue
+        if in_managed or not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) >= 2:
+            export_path = parts[0]
+            for hp in parts[1:]:
+                if "(" in hp and hp.endswith(")"):
+                    host = hp[: hp.index("(")]
+                    options = hp[hp.index("(") + 1 : -1]
+                else:
+                    host = hp
+                    options = ""
+                entries.append(
+                    {
+                        "export_path": export_path,
+                        "allowed_hosts": host,
+                        "options": options,
+                        "source": source,
+                    }
+                )
+        elif len(parts) == 1:
+            entries.append(
+                {
+                    "export_path": parts[0],
+                    "allowed_hosts": "*",
+                    "options": "",
+                    "source": source,
+                }
+            )
+    return entries
+
+
+def get_system_exports() -> list[dict]:
+    """Parse /etc/exports and /etc/exports.d/*.exports for non-managed entries."""
+    entries = []
+
+    # Determine host-aware base path
+    if os.path.isfile(HOST_EXPORTS_FILE):
+        base = "/proc/1/root"
+    else:
+        base = ""
+
+    # Parse main /etc/exports
+    main_path = f"{base}/etc/exports"
+    if os.path.isfile(main_path):
+        try:
+            with open(main_path, "r") as f:
+                entries.extend(_parse_exports_lines(f, source="system"))
+        except Exception as e:
+            logger.error(f"Failed to parse {main_path}: {e}")
+
+    # Parse /etc/exports.d/*.exports
+    exports_d = f"{base}/etc/exports.d"
+    if os.path.isdir(exports_d):
+        try:
+            for fname in sorted(os.listdir(exports_d)):
+                if not fname.endswith(".exports"):
                     continue
-                if stripped == MANAGED_END:
-                    in_managed = False
-                    continue
-                if in_managed or not stripped or stripped.startswith("#"):
-                    continue
-                # Parse: /path host(options) [host2(options2) ...]
-                parts = stripped.split()
-                if len(parts) >= 2:
-                    export_path = parts[0]
-                    # Combine remaining parts as host(options) pairs
-                    host_parts = parts[1:]
-                    for hp in host_parts:
-                        # Split host(options) → host, options
-                        if "(" in hp and hp.endswith(")"):
-                            host = hp[: hp.index("(")]
-                            options = hp[hp.index("(") + 1 : -1]
-                        else:
-                            host = hp
-                            options = ""
-                        entries.append(
-                            {
-                                "export_path": export_path,
-                                "allowed_hosts": host,
-                                "options": options,
-                                "source": "system",
-                            }
+                fpath = os.path.join(exports_d, fname)
+                if os.path.isfile(fpath):
+                    with open(fpath, "r") as f:
+                        entries.extend(
+                            _parse_exports_lines(f, source=f"system ({fname})")
                         )
-                elif len(parts) == 1:
-                    entries.append(
-                        {
-                            "export_path": parts[0],
-                            "allowed_hosts": "*",
-                            "options": "",
-                            "source": "system",
-                        }
-                    )
-    except Exception as e:
-        logger.error(f"Failed to parse {exports_path}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to parse {exports_d}: {e}")
+
     return entries
 
 

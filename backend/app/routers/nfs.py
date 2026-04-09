@@ -393,9 +393,9 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         exports_content = f"[READ ERROR: {e}]"
 
-    # 3) exportfs -v output (use nsenter if host file available)
+    # 3) exportfs -v output (use nsenter with full namespaces if host file available)
     exportfs_cmd = (
-        ["nsenter", "-t", "1", "-m", "--", "exportfs", "-v"]
+        ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--", "exportfs", "-v"]
         if os.path.isfile(host_exports)
         else ["exportfs", "-v"]
     )
@@ -428,11 +428,14 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
                 pids = r.stdout.strip()
         except Exception:
             pass
-        # Check host via /proc/1/root (for privileged containers)
+        # Check host via nsenter (use --mount-proc to remount /proc in host PID ns)
         if not running:
             try:
                 r = subprocess.run(
-                    ["nsenter", "-t", "1", "-m", "-p", "--", "pidof", short],
+                    [
+                        "nsenter", "-t", "1", "-m", "-p", "--mount-proc",
+                        "--", "pidof", short,
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=5,
@@ -444,10 +447,11 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
                 pass
         daemons[name] = {"running": running, "pids": pids}
 
-    # 5) rpcinfo
+    # 5) rpcinfo (use nsenter to query host's rpcbind)
     try:
         r = subprocess.run(
-            ["rpcinfo", "-p"], capture_output=True, text=True, timeout=10
+            ["nsenter", "-t", "1", "-m", "-n", "--", "rpcinfo", "-p"],
+            capture_output=True, text=True, timeout=10,
         )
         rpcinfo = (
             r.stdout.strip()
@@ -494,10 +498,30 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         nfs_port_status = f"[ERROR: {e}]"
 
+    # 9) /etc/exports.d/ contents (host-aware)
+    exports_d_path = (
+        "/proc/1/root/etc/exports.d"
+        if os.path.isfile(host_exports)
+        else "/etc/exports.d"
+    )
+    exports_d = {}
+    if os.path.isdir(exports_d_path):
+        try:
+            for fname in sorted(os.listdir(exports_d_path)):
+                fpath = os.path.join(exports_d_path, fname)
+                if os.path.isfile(fpath):
+                    with open(fpath, "r") as f:
+                        exports_d[fname] = f.read()
+        except Exception as e:
+            exports_d["_error"] = str(e)
+    else:
+        exports_d["_status"] = f"{exports_d_path} does not exist"
+
     return {
         "exports_path_used": exports_path,
         "db_exports": db_exports,
         "etc_exports_content": exports_content,
+        "etc_exports_d": exports_d,
         "exportfs_v": exportfs_output,
         "exportfs_stderr": exportfs_stderr,
         "exportfs_rc": exportfs_rc,
