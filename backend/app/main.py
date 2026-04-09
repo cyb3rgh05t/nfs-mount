@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect, text
 
 from .database import engine, Base, async_session
 from .logging_config import setup_logging
@@ -61,11 +61,28 @@ async def create_default_admin():
             )
 
 
+def _run_migrations(connection):
+    """Add missing columns to existing tables (lightweight auto-migration)."""
+    insp = inspect(connection)
+    # nfs_exports: add auto_enable column if missing
+    if insp.has_table("nfs_exports"):
+        columns = [c["name"] for c in insp.get_columns("nfs_exports")]
+        if "auto_enable" not in columns:
+            connection.execute(
+                text("ALTER TABLE nfs_exports ADD COLUMN auto_enable BOOLEAN DEFAULT 1 NOT NULL")
+            )
+            logger.info("Migration: added 'auto_enable' column to nfs_exports")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Migrate: add missing columns to existing tables
+    async with engine.begin() as conn:
+        await conn.run_sync(_run_migrations)
 
     # Create default admin if needed
     await create_default_admin()
