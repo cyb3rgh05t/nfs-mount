@@ -21,6 +21,7 @@ from ..schemas.nfs import (
 )
 from ..services import nfs_service
 from ..services import nfs_export_service
+from ..services import firewall_service
 from ..services.notification_service import send_alert
 
 logger = logging.getLogger("nfs-manager.router.nfs")
@@ -83,6 +84,8 @@ async def delete_nfs_mount(mount_id: int, db: AsyncSession = Depends(get_db)):
         await nfs_service.unmount_nfs(mount.local_path)
     await db.delete(mount)
     await db.commit()
+    # Update client firewall (removes server if no other mount uses it)
+    await firewall_service.apply_client_firewall(db)
     logger.info("NFS mount deleted: %s (id=%d)", mount.name, mount_id)
     return {"detail": "Deleted"}
 
@@ -240,6 +243,8 @@ async def delete_export(export_id: int, db: AsyncSession = Depends(get_db)):
     # Re-apply exports file
     await nfs_export_service.write_exports_file(db)
     await nfs_export_service.apply_exports()
+    # Update firewall rules
+    await firewall_service.apply_export_firewall(db)
     logger.info("NFS export deleted: id=%d", export_id)
     return {"detail": "Deleted"}
 

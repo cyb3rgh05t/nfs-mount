@@ -18,6 +18,8 @@ import {
   GitMerge,
   Shield,
   ShieldOff,
+  ShieldCheck,
+  ShieldAlert,
   ChevronDown,
   ChevronRight,
   Terminal,
@@ -44,6 +46,7 @@ import {
   KeyRound,
   Upload,
   Download,
+  Flame,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -124,6 +127,7 @@ const tabs = [
   { id: "security", label: "Security", icon: Key },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "system", label: "System", icon: Wrench },
+  { id: "firewall", label: "Firewall", icon: Flame },
   { id: "sshkeys", label: "SSH Keys", icon: KeyRound },
   { id: "howto", label: "How To", icon: BookOpen },
   { id: "about", label: "About", icon: Info },
@@ -147,6 +151,11 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [firewallStatus, setFirewallStatus] = useCachedState(
+    "settings-firewall",
+    null,
+  );
+  const [firewallLoading, setFirewallLoading] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState(null);
   const [showNewKeyForm, setShowNewKeyForm] = useState(false);
@@ -186,20 +195,23 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [notifs, params, docker, keys, users, rpsxps] = await Promise.all([
-        api.getNotificationConfigs().catch(() => []),
-        api.getKernelParams().catch(() => []),
-        api.getDockerInfo().catch(() => null),
-        api.getApiKeys().catch(() => []),
-        user?.is_admin ? api.getUsers().catch(() => []) : Promise.resolve([]),
-        api.getRpsXps().catch(() => null),
-      ]);
+      const [notifs, params, docker, keys, users, rpsxps, fwStatus] =
+        await Promise.all([
+          api.getNotificationConfigs().catch(() => []),
+          api.getKernelParams().catch(() => []),
+          api.getDockerInfo().catch(() => null),
+          api.getApiKeys().catch(() => []),
+          user?.is_admin ? api.getUsers().catch(() => []) : Promise.resolve([]),
+          api.getRpsXps().catch(() => null),
+          api.getFirewallStatus().catch(() => null),
+        ]);
       setConfigs(notifs);
       setKernelParams(params);
       setDockerInfo(docker);
       setApiKeys(keys);
       setAllUsers(users);
       setRpsXps(rpsxps);
+      setFirewallStatus(fwStatus);
 
       const discord = notifs.find((n) => n.type === "discord");
       if (discord) {
@@ -1445,6 +1457,343 @@ export default function SettingsPage() {
               <p className="text-sm text-nfs-muted">Loading Docker info...</p>
             )}
           </Section>
+        </>
+      )}
+
+      {/* Firewall Tab */}
+      {activeTab === "firewall" && (
+        <>
+          {/* Info Box */}
+          <InfoBox variant="info" className="mb-6">
+            NFS Firewall protection restricts access to NFS ports (111, 2049,
+            mountd, nlockmgr, statd) using iptables. Only explicitly allowed
+            hosts from your exports/mounts can reach these services. Rules are
+            auto-applied on startup and when exports/mounts change.
+          </InfoBox>
+
+          {/* Export (Server) Protection */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2 rounded-lg ${firewallStatus?.export_protection?.active ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}
+                >
+                  {firewallStatus?.export_protection?.active ? (
+                    <ShieldCheck className="w-5 h-5" />
+                  ) : (
+                    <ShieldAlert className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    NFS Export Protection (Server)
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    Blocks unauthorized access to NFS server ports
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                    firewallStatus?.export_protection?.active
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {firewallStatus?.export_protection?.active
+                    ? "Active"
+                    : "Inactive"}
+                </span>
+                <button
+                  disabled={firewallLoading}
+                  onClick={async () => {
+                    setFirewallLoading(true);
+                    try {
+                      if (firewallStatus?.export_protection?.active) {
+                        await api.removeExportFirewall();
+                        toast.success("Export firewall removed");
+                      } else {
+                        await api.applyExportFirewall();
+                        toast.success("Export firewall applied");
+                      }
+                      const s = await api.getFirewallStatus();
+                      setFirewallStatus(s);
+                    } catch (e) {
+                      toast.error(e.message);
+                    } finally {
+                      setFirewallLoading(false);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all border ${
+                    firewallStatus?.export_protection?.active
+                      ? "bg-red-500/10 border-red-500/30 hover:border-red-400 text-red-400"
+                      : "bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400 text-emerald-400"
+                  } disabled:opacity-50`}
+                >
+                  {firewallStatus?.export_protection?.active ? (
+                    <>
+                      <ShieldOff className="w-4 h-4" /> Disable
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" /> Enable
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Rules summary */}
+            {firewallStatus?.export_protection?.active && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-nfs-muted mb-2">
+                  {firewallStatus.export_protection.rules_count} active iptables
+                  rules in chain{" "}
+                  <code className="text-nfs-primary">
+                    {firewallStatus.export_protection.chain}
+                  </code>
+                </p>
+                <div className="max-h-40 overflow-y-auto bg-nfs-input/50 rounded-lg p-3">
+                  {firewallStatus.export_protection.rules.map((rule, i) => (
+                    <div
+                      key={i}
+                      className="text-xs font-mono text-nfs-text py-0.5"
+                    >
+                      {rule}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Client Protection */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2 rounded-lg ${firewallStatus?.client_protection?.active ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}
+                >
+                  {firewallStatus?.client_protection?.active ? (
+                    <ShieldCheck className="w-5 h-5" />
+                  ) : (
+                    <ShieldAlert className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    NFS Client Protection
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    Restricts outbound NFS traffic to known servers only
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                    firewallStatus?.client_protection?.active
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {firewallStatus?.client_protection?.active
+                    ? "Active"
+                    : "Inactive"}
+                </span>
+                <button
+                  disabled={firewallLoading}
+                  onClick={async () => {
+                    setFirewallLoading(true);
+                    try {
+                      if (firewallStatus?.client_protection?.active) {
+                        await api.removeClientFirewall();
+                        toast.success("Client firewall removed");
+                      } else {
+                        await api.applyClientFirewall();
+                        toast.success("Client firewall applied");
+                      }
+                      const s = await api.getFirewallStatus();
+                      setFirewallStatus(s);
+                    } catch (e) {
+                      toast.error(e.message);
+                    } finally {
+                      setFirewallLoading(false);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all border ${
+                    firewallStatus?.client_protection?.active
+                      ? "bg-red-500/10 border-red-500/30 hover:border-red-400 text-red-400"
+                      : "bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400 text-emerald-400"
+                  } disabled:opacity-50`}
+                >
+                  {firewallStatus?.client_protection?.active ? (
+                    <>
+                      <ShieldOff className="w-4 h-4" /> Disable
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" /> Enable
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Rules summary */}
+            {firewallStatus?.client_protection?.active && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-nfs-muted mb-2">
+                  {firewallStatus.client_protection.rules_count} active iptables
+                  rules in chain{" "}
+                  <code className="text-nfs-primary">
+                    {firewallStatus.client_protection.chain}
+                  </code>
+                </p>
+                <div className="max-h-40 overflow-y-auto bg-nfs-input/50 rounded-lg p-3">
+                  {firewallStatus.client_protection.rules.map((rule, i) => (
+                    <div
+                      key={i}
+                      className="text-xs font-mono text-nfs-text py-0.5"
+                    >
+                      {rule}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fixed Ports Info */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-nfs-primary/10 text-nfs-primary">
+                <Network className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Fixed NFS Ports
+                </h2>
+                <p className="text-xs text-nfs-muted">
+                  Auxiliary services pinned to fixed ports for reliable firewall
+                  rules
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { label: "rpcbind", port: "111", proto: "TCP/UDP" },
+                { label: "nfsd", port: "2049", proto: "TCP/UDP" },
+                {
+                  label: "mountd",
+                  port: String(firewallStatus?.fixed_ports?.mountd || 32767),
+                  proto: "TCP/UDP",
+                },
+                {
+                  label: "nlockmgr",
+                  port: String(firewallStatus?.fixed_ports?.nlockmgr || 32768),
+                  proto: "TCP/UDP",
+                },
+                {
+                  label: "statd",
+                  port: String(firewallStatus?.fixed_ports?.statd || 32769),
+                  proto: "TCP/UDP",
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="bg-nfs-input/50 rounded-lg p-3"
+                >
+                  <p className="text-xs text-nfs-muted">{item.label}</p>
+                  <p className="text-sm font-mono text-nfs-primary font-semibold">
+                    {item.port}
+                  </p>
+                  <p className="text-xs text-nfs-muted">{item.proto}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Quick Actions
+                </h2>
+                <p className="text-xs text-nfs-muted">
+                  Manage all firewall rules at once
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                disabled={firewallLoading}
+                onClick={async () => {
+                  setFirewallLoading(true);
+                  try {
+                    await api.applyAllFirewall();
+                    toast.success("All firewall rules applied");
+                    const s = await api.getFirewallStatus();
+                    setFirewallStatus(s);
+                  } catch (e) {
+                    toast.error(e.message);
+                  } finally {
+                    setFirewallLoading(false);
+                  }
+                }}
+                className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-400 text-emerald-400 rounded-lg text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                Enable All Protection
+              </button>
+              <button
+                disabled={firewallLoading}
+                onClick={async () => {
+                  setFirewallLoading(true);
+                  try {
+                    await api.removeAllFirewall();
+                    toast.success("All firewall rules removed");
+                    const s = await api.getFirewallStatus();
+                    setFirewallStatus(s);
+                  } catch (e) {
+                    toast.error(e.message);
+                  } finally {
+                    setFirewallLoading(false);
+                  }
+                }}
+                className="px-4 py-2 bg-red-500/10 border border-red-500/30 hover:border-red-400 text-red-400 rounded-lg text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                <ShieldOff className="w-4 h-4" />
+                Disable All Protection
+              </button>
+              <button
+                disabled={firewallLoading}
+                onClick={async () => {
+                  setFirewallLoading(true);
+                  try {
+                    const s = await api.getFirewallStatus();
+                    setFirewallStatus(s);
+                    toast.success("Firewall status refreshed");
+                  } catch (e) {
+                    toast.error(e.message);
+                  } finally {
+                    setFirewallLoading(false);
+                  }
+                }}
+                className="px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 text-nfs-primary ${firewallLoading ? "animate-spin" : ""}`}
+                />
+                Refresh Status
+              </button>
+            </div>
+          </div>
         </>
       )}
 

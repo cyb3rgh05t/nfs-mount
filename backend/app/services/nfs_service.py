@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import async_session
 from ..models.nfs_mount import NFSMount
+from ..services import firewall_service
 
 logger = logging.getLogger("nfs-manager.service.nfs")
 
@@ -77,6 +78,9 @@ async def mount_nfs(mount: NFSMount) -> dict:
         logger.error(f"NFS mount failed: {result.stderr}")
         return {"success": False, "error": result.stderr.strip(), "name": mount.name}
 
+    # Update client firewall to allow traffic to this server
+    await firewall_service.apply_client_firewall()
+
     logger.info(f"NFS mount successful: {local}")
     return {"success": True, "name": mount.name}
 
@@ -89,6 +93,10 @@ async def unmount_nfs(local_path: str) -> dict:
     result = await _run(["umount", "-l", local_path])
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}
+
+    # Update client firewall (may remove server if no other mount uses it)
+    await firewall_service.apply_client_firewall()
+
     return {"success": True}
 
 

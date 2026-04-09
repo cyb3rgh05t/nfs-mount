@@ -89,6 +89,15 @@ const api = {
   getNFSExportsStatus: () => request("GET", "/nfs/exports-status"),
   applyNFSExports: () => request("POST", "/nfs/exports-apply"),
 
+  // Firewall
+  getFirewallStatus: () => request("GET", "/firewall/status"),
+  applyExportFirewall: () => request("POST", "/firewall/apply/exports"),
+  applyClientFirewall: () => request("POST", "/firewall/apply/clients"),
+  applyAllFirewall: () => request("POST", "/firewall/apply/all"),
+  removeExportFirewall: () => request("POST", "/firewall/remove/exports"),
+  removeClientFirewall: () => request("POST", "/firewall/remove/clients"),
+  removeAllFirewall: () => request("POST", "/firewall/remove/all"),
+
   // MergerFS
   getMergerFSConfigs: () => request("GET", "/mergerfs/configs"),
   createMergerFS: (data) => request("POST", "/mergerfs/configs", data),

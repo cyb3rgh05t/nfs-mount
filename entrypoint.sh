@@ -74,6 +74,34 @@ else
     echo "[VPN] No WireGuard config found at /config/wg0.conf - skipping."
 fi
 
+# ── Pin NFS auxiliary services to fixed ports (for firewall) ──
+echo "[NFS] Pinning NFS services to fixed ports for firewall protection..."
+MOUNTD_PORT=32767
+NLOCKMGR_PORT=32768
+STATD_PORT=32769
+
+# Configure statd fixed port
+mkdir -p /var/lib/nfs/sm /var/lib/nfs/sm.bak /var/run/rpc_pipefs 2>/dev/null || true
+
+# Set port in /etc/default/nfs-common (statd)
+cat > /etc/default/nfs-common 2>/dev/null <<EOF
+STATDOPTS="--port $STATD_PORT"
+EOF
+
+# Configure nlockmgr via kernel module params
+echo "options lockd nlm_udpport=$NLOCKMGR_PORT nlm_tcpport=$NLOCKMGR_PORT" > /etc/modprobe.d/lockd.conf 2>/dev/null || true
+# Also set via sysctl for runtime
+sysctl -w fs.nfs.nlm_tcpport=$NLOCKMGR_PORT 2>/dev/null || true
+sysctl -w fs.nfs.nlm_udpport=$NLOCKMGR_PORT 2>/dev/null || true
+
+# Configure mountd fixed port in /etc/default/nfs-kernel-server
+cat > /etc/default/nfs-kernel-server 2>/dev/null <<EOF
+RPCMOUNTDOPTS="--port $MOUNTD_PORT"
+RPCNFSDCOUNT=8
+EOF
+
+echo "[NFS] Fixed ports: mountd=$MOUNTD_PORT, nlockmgr=$NLOCKMGR_PORT, statd=$STATD_PORT"
+
 # ── Clean stale mounts & ensure directories ──
 for mp in /mnt/downloads /mnt/unionfs; do
     if mountpoint -q "$mp" 2>/dev/null; then

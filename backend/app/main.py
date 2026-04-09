@@ -21,12 +21,14 @@ from .routers import (
     vpn,
     api_keys,
     server_monitor,
+    firewall,
 )
 from .services.nfs_service import auto_mount_nfs
 from .services.mergerfs_service import auto_mount_mergerfs
 from .services.vpn_service import auto_connect_vpn
 from .services.notification_service import send_alert
 from .services.system_service import auto_apply_saved_settings
+from .services.firewall_service import apply_all_firewall_rules
 from .models.user import User
 from .auth import hash_password
 from .config import settings
@@ -102,6 +104,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Auto-mount failed: {e}")
 
+    # Auto-apply firewall rules for NFS protection
+    try:
+        fw_result = await apply_all_firewall_rules()
+        if fw_result["success"]:
+            logger.info("NFS firewall rules applied on startup")
+        else:
+            logger.warning(f"NFS firewall rules partially failed: {fw_result}")
+    except Exception as e:
+        logger.error(f"Auto-apply firewall rules failed: {e}")
+
     yield
 
 
@@ -139,6 +151,7 @@ app.include_router(nfs.router, prefix="/api/nfs", tags=["NFS"])
 app.include_router(mergerfs.router, prefix="/api/mergerfs", tags=["MergerFS"])
 app.include_router(vpn.router, prefix="/api/vpn", tags=["VPN"])
 app.include_router(server_monitor.router, prefix="/api/monitor", tags=["Monitor"])
+app.include_router(firewall.router, prefix="/api/firewall", tags=["Firewall"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(
     notifications.router, prefix="/api/notifications", tags=["Notifications"]

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import async_session
 from ..models.nfs_export import NFSExport
+from ..services import firewall_service
 
 logger = logging.getLogger("nfs-manager.service.nfs_export")
 
@@ -92,9 +93,11 @@ async def apply_exports() -> dict:
 
 
 async def start_nfs_server() -> dict:
-    """Ensure NFS server daemons are running."""
+    """Ensure NFS server daemons are running with fixed ports."""
     # Start rpcbind if not running
     await _run(["rpcbind"])
+    # Start statd with fixed port
+    await _run(["rpc.statd", "--port", str(firewall_service.STATD_PORT)])
     # Export the filesystems
     result = await _run(["exportfs", "-ra"])
     if result.returncode != 0:
@@ -106,8 +109,8 @@ async def start_nfs_server() -> dict:
         and "already running" not in (result.stderr or "").lower()
     ):
         return {"success": False, "error": result.stderr.strip()}
-    # Start mountd
-    result = await _run(["rpc.mountd"])
+    # Start mountd with fixed port
+    result = await _run(["rpc.mountd", "--port", str(firewall_service.MOUNTD_PORT)])
     if (
         result.returncode != 0
         and "already running" not in (result.stderr or "").lower()
@@ -129,7 +132,7 @@ async def get_active_exports() -> list[str]:
 
 
 async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
-    """Enable an export: write /etc/exports and apply."""
+    """Enable an export: write /etc/exports, apply, and update firewall."""
     write_result = await write_exports_file(db)
     if not write_result["success"]:
         return write_result
@@ -137,11 +140,13 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
     if apply_result["success"]:
         export.is_active = True
         await db.commit()
+        # Update firewall rules to allow the new host
+        await firewall_service.apply_export_firewall(db)
     return apply_result
 
 
 async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
-    """Disable a specific export via exportfs -u."""
+    """Disable a specific export via exportfs -u and update firewall."""
     result = await _run(
         ["exportfs", "-u", f"{export.allowed_hosts}:{export.export_path}"]
     )
@@ -150,13 +155,15 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     # Re-write exports file
     await write_exports_file(db)
     await apply_exports()
+    # Update firewall rules (removes host if no other export uses it)
+    await firewall_service.apply_export_firewall(db)
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}
     return {"success": True}
 
 
 async def apply_all_exports() -> dict:
-    """Write exports file from DB and apply."""
+    """Write exports file from DB, apply, and update firewall."""
     async with async_session() as session:
         write_result = await write_exports_file(session)
         if not write_result["success"]:
@@ -170,4 +177,6 @@ async def apply_all_exports() -> dict:
             for exp in result.scalars().all():
                 exp.is_active = True
             await session.commit()
+            # Update firewall rules
+            await firewall_service.apply_export_firewall(session)
         return apply_result
