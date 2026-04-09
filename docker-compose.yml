@@ -32,4 +32,6 @@ services:
       - "/mnt:/mnt:rshared"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "/etc/hostname:/etc/hostname_host:ro"
-      - "/etc/exports:/etc/exports"
+      # Optional: mount host /etc/exports for NFS server export management
+      # Only add this if /etc/exports exists on the host:
+      # - "/etc/exports:/etc/exports"
