@@ -69,7 +69,9 @@ def _run_migrations(connection):
         columns = [c["name"] for c in insp.get_columns("nfs_exports")]
         if "auto_enable" not in columns:
             connection.execute(
-                text("ALTER TABLE nfs_exports ADD COLUMN auto_enable BOOLEAN DEFAULT 1 NOT NULL")
+                text(
+                    "ALTER TABLE nfs_exports ADD COLUMN auto_enable BOOLEAN DEFAULT 1 NOT NULL"
+                )
             )
             logger.info("Migration: added 'auto_enable' column to nfs_exports")
 
