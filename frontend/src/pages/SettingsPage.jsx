@@ -146,7 +146,10 @@ export default function SettingsPage() {
   const [kernelParams, setKernelParams] = useCachedState("settings-kernel", []);
   const [dockerInfo, setDockerInfo] = useCachedState("settings-docker", null);
   const [rpsXps, setRpsXps] = useCachedState("settings-rpsxps", null);
-  const [nfsThreads, setNfsThreads] = useCachedState("settings-nfsthreads", null);
+  const [nfsThreads, setNfsThreads] = useCachedState(
+    "settings-nfsthreads",
+    null,
+  );
   const [apiKeys, setApiKeys] = useCachedState("settings-apikeys", []);
   const [sshKeys, setSSHKeys] = useCachedState("settings-sshkeys", []);
   const [uploading, setUploading] = useState(false);
@@ -1398,7 +1401,8 @@ export default function SettingsPage() {
               />
             </div>
             <p className="text-[10px] text-nfs-muted mt-2 px-1">
-              More threads = more parallel NFS client requests. For 80+ streams use 512+. Default via NFS_THREADS env var.
+              More threads = more parallel NFS client requests. For 80+ streams
+              use 512+. Default via NFS_THREADS env var.
             </p>
           </div>
 
