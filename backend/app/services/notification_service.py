@@ -89,6 +89,7 @@ async def send_discord(
         "ERROR": 15158588,
         "CRITICAL": 15158588,
         "INFO": 3447003,
+        "SHUTDOWN": 15105570,
     }
     emoji_map = {
         "STARTUP": "\U0001f680",
@@ -96,6 +97,7 @@ async def send_discord(
         "ERROR": "\u26a0\ufe0f",
         "CRITICAL": "\u26a0\ufe0f",
         "INFO": "\u2139\ufe0f",
+        "SHUTDOWN": "\U0001f534",
     }
 
     color = color_map.get(status, 3447003)
@@ -148,6 +150,7 @@ async def send_telegram(
         "ERROR": "\u26a0\ufe0f",
         "CRITICAL": "\u26a0\ufe0f",
         "INFO": "\u2139\ufe0f",
+        "SHUTDOWN": "\U0001f534",
     }
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%H:%M:%S | %d.%m.%Y")

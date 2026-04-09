@@ -29,7 +29,9 @@ from .services.vpn_service import auto_connect_vpn
 from .services.notification_service import send_alert
 from .services.system_service import auto_apply_saved_settings
 from .services.firewall_service import apply_all_firewall_rules
+from .services.nfs_export_service import start_nfs_server, write_exports_file
 from .models.user import User
+from .models.nfs_export import NFSExport
 from .auth import hash_password
 from .config import settings
 
@@ -114,7 +116,44 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Auto-apply firewall rules failed: {e}")
 
+    # Auto-start NFS server if there are auto-enable exports
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(NFSExport).where(
+                    NFSExport.enabled == True,  # noqa: E712
+                    NFSExport.auto_enable == True,  # noqa: E712
+                )
+            )
+            enabled_exports = list(result.scalars().all())
+            if enabled_exports:
+                logger.info(
+                    f"Found {len(enabled_exports)} auto-enable NFS export(s), starting NFS server..."
+                )
+                await write_exports_file(db)
+                srv_result = await start_nfs_server()
+                if srv_result["success"]:
+                    for exp in enabled_exports:
+                        exp.is_active = True
+                    await db.commit()
+                    logger.info("NFS server started successfully for exports")
+                else:
+                    logger.error(f"NFS server start failed: {srv_result.get('error')}")
+    except Exception as e:
+        logger.error(f"Auto-start NFS exports failed: {e}")
+
     yield
+
+    # ── Shutdown: send notification ──
+    logger.info("Container shutting down...")
+    try:
+        await send_alert(
+            "SHUTDOWN",
+            "Container is shutting down",
+            {"Action": "All mounts and exports will be unavailable"},
+        )
+    except Exception as e:
+        logger.error(f"Shutdown notification failed: {e}")
 
 
 app = FastAPI(

@@ -21,6 +21,7 @@ class NFSExport(Base):
     )
     nfs_version: Mapped[str] = mapped_column(String(10), default="4.2")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_enable: Mapped[bool] = mapped_column(Boolean, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[Optional[datetime]] = mapped_column(server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(

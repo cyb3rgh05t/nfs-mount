@@ -133,17 +133,20 @@ async def get_active_exports() -> list[str]:
 
 
 async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
-    """Enable an export: write /etc/exports, apply, and update firewall."""
+    """Enable an export: write /etc/exports, start NFS server, and update firewall."""
     write_result = await write_exports_file(db)
     if not write_result["success"]:
         return write_result
-    apply_result = await apply_exports()
-    if apply_result["success"]:
-        export.is_active = True
-        await db.commit()
-        # Update firewall rules to allow the new host
-        await firewall_service.apply_export_firewall(db)
-    return apply_result
+    # Ensure NFS server daemons are running (also calls exportfs -ra internally)
+    server_result = await start_nfs_server()
+    if not server_result["success"]:
+        logger.error(f"NFS server start failed: {server_result.get('error')}")
+        return server_result
+    export.is_active = True
+    await db.commit()
+    # Update firewall rules to allow the new host
+    await firewall_service.apply_export_firewall(db)
+    return server_result
 
 
 async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
@@ -164,13 +167,14 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
 
 
 async def apply_all_exports() -> dict:
-    """Write exports file from DB, apply, and update firewall."""
+    """Write exports file from DB, start NFS server, and update firewall."""
     async with async_session() as session:
         write_result = await write_exports_file(session)
         if not write_result["success"]:
             return write_result
-        apply_result = await apply_exports()
-        if apply_result["success"]:
+        # Ensure NFS server daemons are running (also calls exportfs -ra internally)
+        server_result = await start_nfs_server()
+        if server_result["success"]:
             # Mark all enabled exports as active
             result = await session.execute(
                 select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
@@ -180,4 +184,4 @@ async def apply_all_exports() -> dict:
             await session.commit()
             # Update firewall rules
             await firewall_service.apply_export_firewall(session)
-        return apply_result
+        return server_result

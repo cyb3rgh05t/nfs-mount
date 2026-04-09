@@ -328,7 +328,8 @@ async def apply_all_exports(db: AsyncSession = Depends(get_db)):
     write_result = await nfs_export_service.write_exports_file(db)
     if not write_result["success"]:
         return write_result
-    result = await nfs_export_service.apply_exports()
+    # Ensure NFS server daemons are running (also calls exportfs -ra)
+    result = await nfs_export_service.start_nfs_server()
     if result["success"]:
         # Mark enabled exports as active
         res = await db.execute(

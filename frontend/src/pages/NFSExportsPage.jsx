@@ -18,6 +18,7 @@ import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
+import Toggle from "../components/Toggle";
 
 const DEFAULT_EXPORT_OPTIONS = "rw,sync,no_subtree_check,no_root_squash";
 
@@ -71,6 +72,7 @@ export default function NFSExportsPage() {
     options: DEFAULT_EXPORT_OPTIONS,
     nfs_version: "4.2",
     enabled: true,
+    auto_enable: true,
   });
 
   const fetchData = async () => {
@@ -103,6 +105,7 @@ export default function NFSExportsPage() {
       options: DEFAULT_EXPORT_OPTIONS,
       nfs_version: "4.2",
       enabled: true,
+      auto_enable: true,
     });
     setShowForm(true);
   };
@@ -443,18 +446,17 @@ export default function NFSExportsPage() {
               onChange={(e) => setForm({ ...form, options: e.target.value })}
             />
           </Field>
-          <div className="flex gap-4 mb-4">
-            <label className="flex items-center gap-2 text-sm text-nfs-text">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(e) =>
-                  setForm({ ...form, enabled: e.target.checked })
-                }
-                className="rounded border-nfs-border"
-              />
-              Enabled
-            </label>
+          <div className="flex gap-6 mb-4">
+            <Toggle
+              checked={form.enabled}
+              onChange={(v) => setForm({ ...form, enabled: v })}
+              label="Enabled"
+            />
+            <Toggle
+              checked={form.auto_enable}
+              onChange={(v) => setForm({ ...form, auto_enable: v })}
+              label="Auto Enable"
+            />
           </div>
           <div className="flex justify-end gap-3">
             <button

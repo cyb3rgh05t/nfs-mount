@@ -62,6 +62,7 @@ class NFSExportBase(BaseModel):
     options: str = "rw,sync,no_subtree_check,no_root_squash"
     nfs_version: str = "4.2"
     enabled: bool = True
+    auto_enable: bool = True
 
 
 class NFSExportCreate(NFSExportBase):
@@ -75,6 +76,7 @@ class NFSExportUpdate(BaseModel):
     options: str | None = None
     nfs_version: str | None = None
     enabled: bool | None = None
+    auto_enable: bool | None = None
 
 
 class NFSExportResponse(NFSExportBase):
