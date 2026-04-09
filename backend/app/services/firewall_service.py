@@ -6,14 +6,19 @@ so that only explicitly allowed hosts can reach the NFS server.
 
 For NFS clients, outgoing NFS traffic is restricted to only configured server IPs.
 
+VPN-Only mode: when enabled, NFS server ports are ONLY accessible via VPN interfaces
+(wg*, ovpn*), blocking all access from public interfaces even for allowed hosts.
+
 Chain layout:
   NFS_EXPORT_PROTECT  – INPUT chain: protect NFS server ports
   NFS_CLIENT_PROTECT  – OUTPUT chain: restrict outbound NFS traffic to known servers
 """
 
 import asyncio
+import glob
 import ipaddress
 import logging
+import os
 import subprocess
 
 from sqlalchemy import select
@@ -29,6 +34,9 @@ logger = logging.getLogger("nfs-manager.service.firewall")
 MOUNTD_PORT = 32767
 NLOCKMGR_PORT = 32768
 STATD_PORT = 32769
+
+# Persistent state file for VPN-only mode
+_VPN_ONLY_STATE_FILE = "/data/firewall_vpn_only.flag"
 
 # NFS server ports to protect
 NFS_SERVER_PORTS = [
@@ -54,6 +62,39 @@ NFS_CLIENT_PORTS = [
 
 EXPORT_CHAIN = "NFS_EXPORT_PROTECT"
 CLIENT_CHAIN = "NFS_CLIENT_PROTECT"
+
+
+def is_vpn_only_enabled() -> bool:
+    """Check if VPN-only mode is enabled (persistent across restarts)."""
+    return os.path.isfile(_VPN_ONLY_STATE_FILE)
+
+
+def set_vpn_only(enabled: bool):
+    """Enable or disable VPN-only mode persistently."""
+    if enabled:
+        os.makedirs(os.path.dirname(_VPN_ONLY_STATE_FILE), exist_ok=True)
+        with open(_VPN_ONLY_STATE_FILE, "w") as f:
+            f.write("1")
+        logger.info("VPN-only mode enabled")
+    else:
+        try:
+            os.remove(_VPN_ONLY_STATE_FILE)
+        except FileNotFoundError:
+            pass
+        logger.info("VPN-only mode disabled")
+
+
+def _get_vpn_interfaces() -> list[str]:
+    """Detect active VPN interfaces (wg*, ovpn*, tun*)."""
+    interfaces = []
+    try:
+        for path in glob.glob("/sys/class/net/*"):
+            iface = os.path.basename(path)
+            if iface.startswith(("wg", "ovpn", "tun")):
+                interfaces.append(iface)
+    except Exception:
+        pass
+    return interfaces
 
 
 def _run_ipt(args: list[str], timeout: int = 10) -> subprocess.CompletedProcess:
@@ -157,16 +198,23 @@ async def apply_export_firewall(db: AsyncSession | None = None) -> dict:
         allowed_cidrs.add("127.0.0.0/8")
 
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: _apply_export_rules(allowed_cidrs))
+        vpn_only = is_vpn_only_enabled()
+        vpn_ifaces = _get_vpn_interfaces() if vpn_only else []
+        await loop.run_in_executor(
+            None, lambda: _apply_export_rules(allowed_cidrs, vpn_only, vpn_ifaces)
+        )
 
         logger.info(
             f"Export firewall applied: {len(exports)} exports, "
             f"{len(allowed_cidrs)} allowed CIDRs"
+            f"{', VPN-only mode (' + ','.join(vpn_ifaces) + ')' if vpn_only and vpn_ifaces else ''}"
         )
         return {
             "success": True,
             "exports_count": len(exports),
             "allowed_hosts": sorted(allowed_cidrs),
+            "vpn_only": vpn_only,
+            "vpn_interfaces": vpn_ifaces,
         }
 
     except Exception as e:
@@ -174,7 +222,9 @@ async def apply_export_firewall(db: AsyncSession | None = None) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def _apply_export_rules(allowed_cidrs: set[str]):
+def _apply_export_rules(
+    allowed_cidrs: set[str], vpn_only: bool = False, vpn_ifaces: list[str] | None = None
+):
     """Synchronous iptables rule application for export protection."""
     _ensure_chain(EXPORT_CHAIN)
     _flush_chain(EXPORT_CHAIN)
@@ -193,23 +243,66 @@ def _apply_export_rules(allowed_cidrs: set[str]):
         ]
     )
 
-    # For each allowed CIDR, allow access to NFS ports
-    for cidr in sorted(allowed_cidrs):
-        for port, proto in NFS_SERVER_PORTS:
-            _run_ipt(
-                [
-                    "-A",
-                    EXPORT_CHAIN,
-                    "-p",
-                    proto,
-                    "-s",
-                    cidr,
-                    "--dport",
-                    str(port),
-                    "-j",
-                    "ACCEPT",
-                ]
-            )
+    # Always allow loopback interface
+    for port, proto in NFS_SERVER_PORTS:
+        _run_ipt(
+            [
+                "-A",
+                EXPORT_CHAIN,
+                "-i",
+                "lo",
+                "-p",
+                proto,
+                "--dport",
+                str(port),
+                "-j",
+                "ACCEPT",
+            ]
+        )
+
+    if vpn_only and vpn_ifaces:
+        # VPN-ONLY MODE: only allow NFS access via VPN interfaces
+        for iface in vpn_ifaces:
+            for cidr in sorted(allowed_cidrs):
+                if cidr == "127.0.0.0/8":
+                    continue  # already handled via lo above
+                for port, proto in NFS_SERVER_PORTS:
+                    _run_ipt(
+                        [
+                            "-A",
+                            EXPORT_CHAIN,
+                            "-i",
+                            iface,
+                            "-p",
+                            proto,
+                            "-s",
+                            cidr,
+                            "--dport",
+                            str(port),
+                            "-j",
+                            "ACCEPT",
+                        ]
+                    )
+    else:
+        # STANDARD MODE: allow by IP regardless of interface
+        for cidr in sorted(allowed_cidrs):
+            if cidr == "127.0.0.0/8":
+                continue  # already handled via lo above
+            for port, proto in NFS_SERVER_PORTS:
+                _run_ipt(
+                    [
+                        "-A",
+                        EXPORT_CHAIN,
+                        "-p",
+                        proto,
+                        "-s",
+                        cidr,
+                        "--dport",
+                        str(port),
+                        "-j",
+                        "ACCEPT",
+                    ]
+                )
 
     # Drop everything else on NFS ports
     for port, proto in NFS_SERVER_PORTS:
@@ -447,6 +540,8 @@ def _get_status() -> dict:
             "rules_count": len(client_rules),
             "rules": client_rules,
         },
+        "vpn_only": is_vpn_only_enabled(),
+        "vpn_interfaces": _get_vpn_interfaces(),
         "fixed_ports": {
             "mountd": MOUNTD_PORT,
             "nlockmgr": NLOCKMGR_PORT,

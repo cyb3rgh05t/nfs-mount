@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import verify_api_key
 from ..database import get_db
-from ..schemas.firewall import FirewallStatus
+from ..schemas.firewall import FirewallStatus, VPNOnlyToggle
 from ..services import firewall_service
 
 logger = logging.getLogger("nfs-manager.router.firewall")
@@ -65,3 +65,20 @@ async def remove_all_firewall():
     logger.info("Removing all NFS firewall rules")
     result = await firewall_service.remove_all_firewall_rules()
     return result
+
+
+@router.post("/vpn-only")
+async def toggle_vpn_only(data: VPNOnlyToggle, db: AsyncSession = Depends(get_db)):
+    """Toggle VPN-only mode for NFS export protection.
+    When enabled, NFS server ports are only accessible via VPN interfaces.
+    """
+    logger.info("Setting VPN-only mode: %s", data.enabled)
+    firewall_service.set_vpn_only(data.enabled)
+    # Re-apply export firewall with new mode
+    result = await firewall_service.apply_export_firewall(db)
+    return {
+        "success": result["success"],
+        "vpn_only": data.enabled,
+        "vpn_interfaces": firewall_service._get_vpn_interfaces(),
+        **({k: v for k, v in result.items() if k != "success"}),
+    }

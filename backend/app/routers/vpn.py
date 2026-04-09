@@ -14,6 +14,7 @@ from ..schemas.vpn import (
     VPNStatus,
 )
 from ..services import vpn_service
+from ..services import firewall_service
 from ..services.notification_service import send_alert
 
 logger = logging.getLogger("nfs-manager.router.vpn")
@@ -101,6 +102,12 @@ async def connect_vpn(config_id: int, db: AsyncSession = Depends(get_db)):
             f"VPN **{config.name}** ({config.vpn_type}) connected",
             vpn_details,
         )
+        # Auto-refresh firewall rules (VPN interface now available)
+        try:
+            await firewall_service.apply_all_firewall_rules()
+            logger.info("Firewall rules refreshed after VPN connect")
+        except Exception as e:
+            logger.warning(f"Firewall refresh after VPN connect failed: {e}")
     else:
         logger.error(
             "VPN connect failed: %s – %s", config.name, result.get("error", "Unknown")
@@ -129,6 +136,12 @@ async def disconnect_vpn(config_id: int, db: AsyncSession = Depends(get_db)):
             f"VPN **{config.name}** disconnected",
             {"Type": config.vpn_type.upper()},
         )
+        # Auto-refresh firewall rules (VPN interface removed)
+        try:
+            await firewall_service.apply_all_firewall_rules()
+            logger.info("Firewall rules refreshed after VPN disconnect")
+        except Exception as e:
+            logger.warning(f"Firewall refresh after VPN disconnect failed: {e}")
     return result
 
 

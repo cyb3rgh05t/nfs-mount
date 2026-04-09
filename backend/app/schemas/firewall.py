@@ -17,6 +17,8 @@ class FirewallFixedPorts(BaseModel):
 class FirewallStatus(BaseModel):
     export_protection: FirewallProtectionStatus
     client_protection: FirewallProtectionStatus
+    vpn_only: bool = False
+    vpn_interfaces: list[str] = []
     fixed_ports: FirewallFixedPorts
 
 
@@ -26,4 +28,10 @@ class FirewallApplyResult(BaseModel):
     mounts_count: int | None = None
     allowed_hosts: list[str] | None = None
     allowed_servers: list[str] | None = None
+    vpn_only: bool | None = None
+    vpn_interfaces: list[str] | None = None
     error: str | None = None
+
+
+class VPNOnlyToggle(BaseModel):
+    enabled: bool

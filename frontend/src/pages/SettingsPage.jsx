@@ -1665,7 +1665,106 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Fixed Ports Info */}
+          {/* VPN-Only Mode */}
+          <div
+            className={`bg-nfs-card border rounded-xl p-5 mb-6 transition-all ${
+              firewallStatus?.vpn_only
+                ? "border-purple-500/50 hover:border-purple-400"
+                : "border-nfs-border hover:border-nfs-muted"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2 rounded-lg ${
+                    firewallStatus?.vpn_only
+                      ? "bg-purple-500/10 text-purple-400"
+                      : "bg-nfs-input text-nfs-muted"
+                  }`}
+                >
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    VPN-Only Mode
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    NFS server ports only accessible via VPN tunnel — encrypts
+                    all NFS traffic
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {firewallStatus?.vpn_only && (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                    Enforced
+                  </span>
+                )}
+                <button
+                  disabled={firewallLoading}
+                  onClick={async () => {
+                    setFirewallLoading(true);
+                    try {
+                      const newState = !firewallStatus?.vpn_only;
+                      await api.toggleVPNOnly(newState);
+                      toast.success(
+                        newState
+                          ? "VPN-Only mode enabled — NFS only accessible via VPN"
+                          : "VPN-Only mode disabled",
+                      );
+                      const s = await api.getFirewallStatus();
+                      setFirewallStatus(s);
+                    } catch (e) {
+                      toast.error(e.message);
+                    } finally {
+                      setFirewallLoading(false);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all border ${
+                    firewallStatus?.vpn_only
+                      ? "bg-red-500/10 border-red-500/30 hover:border-red-400 text-red-400"
+                      : "bg-purple-500/10 border-purple-500/30 hover:border-purple-400 text-purple-400"
+                  } disabled:opacity-50`}
+                >
+                  {firewallStatus?.vpn_only ? (
+                    <>
+                      <ShieldOff className="w-4 h-4" /> Disable
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-4 h-4" /> Enable
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* VPN interfaces info */}
+            {firewallStatus?.vpn_interfaces?.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mt-2">
+                <span className="text-xs text-nfs-muted">
+                  Active VPN interfaces:
+                </span>
+                {firewallStatus.vpn_interfaces.map((iface) => (
+                  <span
+                    key={iface}
+                    className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-400 text-xs font-mono border border-purple-500/30"
+                  >
+                    {iface}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2">
+                <InfoBox variant="warning" className="!mb-0">
+                  No active VPN interfaces detected. Connect a VPN tunnel first,
+                  then enable VPN-Only mode.
+                </InfoBox>
+              </div>
+            )}
+          </div>
+
+          {/* Fixed NFS Ports */}
           <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-lg bg-nfs-primary/10 text-nfs-primary">

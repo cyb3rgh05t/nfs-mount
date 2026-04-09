@@ -97,6 +97,8 @@ const api = {
   removeExportFirewall: () => request("POST", "/firewall/remove/exports"),
   removeClientFirewall: () => request("POST", "/firewall/remove/clients"),
   removeAllFirewall: () => request("POST", "/firewall/remove/all"),
+  toggleVPNOnly: (enabled) =>
+    request("POST", "/firewall/vpn-only", { enabled }),
 
   // MergerFS
   getMergerFSConfigs: () => request("GET", "/mergerfs/configs"),
