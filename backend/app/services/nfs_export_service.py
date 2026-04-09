@@ -14,8 +14,28 @@ from ..config import settings
 logger = logging.getLogger("nfs-manager.service.nfs_export")
 
 EXPORTS_FILE = "/etc/exports"
+HOST_EXPORTS_FILE = "/proc/1/root/etc/exports"
 MANAGED_BEGIN = "# --- NFS-Manager BEGIN ---"
 MANAGED_END = "# --- NFS-Manager END ---"
+
+
+def _get_exports_path() -> str:
+    """Return the effective /etc/exports path.
+
+    Prefers the host file via /proc/1/root (privileged container) so edits
+    affect the host NFS server directly.
+    """
+    if os.path.isfile(HOST_EXPORTS_FILE):
+        return HOST_EXPORTS_FILE
+    return EXPORTS_FILE
+
+
+def _exportfs_cmd(args: list[str]) -> list[str]:
+    """Build an exportfs command, using nsenter into the host mount namespace
+    when running in a privileged container."""
+    if os.path.isfile(HOST_EXPORTS_FILE):
+        return ["nsenter", "-t", "1", "-m", "--", "exportfs"] + args
+    return ["exportfs"] + args
 
 
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
@@ -46,16 +66,19 @@ async def write_exports_file(db: AsyncSession) -> dict:
     exports = result.scalars().all()
     logger.info(f"write_exports_file: found {len(exports)} enabled exports")
 
+    exports_path = _get_exports_path()
+    logger.info(f"write_exports_file: using exports path {exports_path}")
+
     # Read existing file (preserve non-managed content)
     existing_lines: list[str] = []
-    if os.path.isfile(EXPORTS_FILE):
-        with open(EXPORTS_FILE, "r") as f:
+    if os.path.isfile(exports_path):
+        with open(exports_path, "r") as f:
             existing_lines = f.readlines()
         logger.info(
             f"write_exports_file: existing file has {len(existing_lines)} lines"
         )
     else:
-        logger.info("write_exports_file: /etc/exports does not exist yet")
+        logger.info(f"write_exports_file: {exports_path} does not exist yet")
 
     # Remove old managed block
     new_lines: list[str] = []
@@ -83,18 +106,20 @@ async def write_exports_file(db: AsyncSession) -> dict:
     final = new_lines + ["\n"] + managed
 
     try:
-        with open(EXPORTS_FILE, "w") as f:
+        with open(exports_path, "w") as f:
             f.writelines(final)
-        logger.info(f"write_exports_file: wrote {len(final)} lines to {EXPORTS_FILE}")
+        logger.info(f"write_exports_file: wrote {len(final)} lines to {exports_path}")
         return {"success": True}
     except Exception as e:
-        logger.error(f"Failed to write {EXPORTS_FILE}: {e}")
+        logger.error(f"Failed to write {exports_path}: {e}")
         return {"success": False, "error": str(e)}
 
 
 async def apply_exports() -> dict:
     """Run exportfs -ra to apply /etc/exports changes."""
-    result = await _run(["exportfs", "-ra"])
+    cmd = _exportfs_cmd(["-ra"])
+    logger.info(f"apply_exports: running {' '.join(cmd)}")
+    result = await _run(cmd)
     if result.returncode != 0:
         logger.error(f"exportfs -ra failed: {result.stderr}")
         return {"success": False, "error": result.stderr.strip()}
@@ -103,13 +128,38 @@ async def apply_exports() -> dict:
 
 
 def _host_nfs_running() -> bool:
-    """Check if the host NFS server is running by reading /proc/fs/nfsd/threads."""
+    """Check if the host NFS server is running.
+
+    Checks multiple indicators since container PID namespace can't see host processes:
+    1. /proc/fs/nfsd/threads > 0
+    2. Port 2049 is listening (via ss)
+    """
+    # Method 1: /proc/fs/nfsd/threads
     try:
         with open("/proc/fs/nfsd/threads", "r") as f:
             threads = int(f.read().strip())
-            return threads > 0
+            if threads > 0:
+                logger.info(f"_host_nfs_running: /proc/fs/nfsd/threads={threads}")
+                return True
     except Exception:
-        return False
+        pass
+
+    # Method 2: check if port 2049 is listening
+    try:
+        r = subprocess.run(
+            ["ss", "-tlnH", "sport", "=", "2049"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if r.stdout.strip():
+            logger.info("_host_nfs_running: port 2049 is listening")
+            return True
+    except Exception:
+        pass
+
+    logger.info("_host_nfs_running: no host NFS server detected")
+    return False
 
 
 async def start_nfs_server() -> dict:
@@ -126,7 +176,9 @@ async def start_nfs_server() -> dict:
         logger.info(
             "start_nfs_server: host NFS server already running, reloading exports..."
         )
-        result = await _run(["exportfs", "-ra"])
+        cmd = _exportfs_cmd(["-ra"])
+        logger.info(f"start_nfs_server: running {' '.join(cmd)}")
+        result = await _run(cmd)
         logger.info(
             f"start_nfs_server: exportfs -ra rc={result.returncode} "
             f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
@@ -202,7 +254,8 @@ async def start_nfs_server() -> dict:
 async def get_active_exports() -> list[str]:
     """Get list of currently active NFS exports via exportfs -v."""
     try:
-        result = await _run(["exportfs", "-v"])
+        cmd = _exportfs_cmd(["-v"])
+        result = await _run(cmd)
     except FileNotFoundError:
         logger.warning("exportfs not found – nfs-kernel-server not installed?")
         return []
@@ -213,12 +266,13 @@ async def get_active_exports() -> list[str]:
 
 def get_system_exports() -> list[dict]:
     """Parse /etc/exports and return non-managed entries (manual exports)."""
-    if not os.path.isfile(EXPORTS_FILE):
+    exports_path = _get_exports_path()
+    if not os.path.isfile(exports_path):
         return []
     entries = []
     in_managed = False
     try:
-        with open(EXPORTS_FILE, "r") as f:
+        with open(exports_path, "r") as f:
             for line in f:
                 stripped = line.strip()
                 if stripped == MANAGED_BEGIN:
@@ -261,7 +315,7 @@ def get_system_exports() -> list[dict]:
                         }
                     )
     except Exception as e:
-        logger.error(f"Failed to parse {EXPORTS_FILE}: {e}")
+        logger.error(f"Failed to parse {exports_path}: {e}")
     return entries
 
 
@@ -296,9 +350,9 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
 
 async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     """Disable a specific export via exportfs -u and update firewall."""
-    result = await _run(
-        ["exportfs", "-u", f"{export.allowed_hosts}:{export.export_path}"]
-    )
+    cmd = _exportfs_cmd(["-u", f"{export.allowed_hosts}:{export.export_path}"])
+    logger.info(f"disable_export: running {' '.join(cmd)}")
+    result = await _run(cmd)
     export.enabled = False
     export.is_active = False
     await db.commit()

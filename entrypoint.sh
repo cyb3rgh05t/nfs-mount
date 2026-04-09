@@ -133,19 +133,14 @@ if [ ! -d /var/lib/nfs/rpc_pipefs ] || ! mountpoint -q /var/lib/nfs/rpc_pipefs 2
     mount -t rpc_pipefs rpc_pipefs /var/lib/nfs/rpc_pipefs 2>/dev/null || true
 fi
 
-# ── Bind-mount host /etc/exports if available ──
-# With privileged mode, we can access the host filesystem via /proc/1/root
-# (PID 1 on the host is always init/systemd)
+# ── Detect host /etc/exports access ──
+# With privileged mode the Python service accesses the host file directly
+# via /proc/1/root/etc/exports — no bind mount needed.
 HOST_EXPORTS="/proc/1/root/etc/exports"
-if [ -f "$HOST_EXPORTS" ] && ! mount | grep -q "on /etc/exports type"; then
-    echo "[NFS] Found host /etc/exports, bind-mounting..."
-    mount --bind "$HOST_EXPORTS" /etc/exports 2>/dev/null && \
-        echo "[NFS] Host /etc/exports bind-mounted successfully" || \
-        echo "[NFS] WARNING: Could not bind-mount host /etc/exports"
-elif mount | grep -q "on /etc/exports type"; then
-    echo "[NFS] /etc/exports already bind-mounted (via docker-compose volume)"
+if [ -f "$HOST_EXPORTS" ]; then
+    echo "[NFS] Host /etc/exports accessible via $HOST_EXPORTS — will manage host exports directly"
 else
-    echo "[NFS] No host /etc/exports found — using container-local file"
+    echo "[NFS] Host /etc/exports NOT accessible — will use container-local /etc/exports"
 fi
 
 # ── Clean stale mounts & ensure directories ──

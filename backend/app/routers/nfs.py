@@ -380,22 +380,27 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
             }
         )
 
-    # 2) /etc/exports file content
+    # 2) /etc/exports file content (prefer host file via /proc/1/root)
+    host_exports = "/proc/1/root/etc/exports"
+    exports_path = host_exports if os.path.isfile(host_exports) else "/etc/exports"
     exports_content = ""
     try:
-        if os.path.isfile("/etc/exports"):
-            with open("/etc/exports", "r") as f:
+        if os.path.isfile(exports_path):
+            with open(exports_path, "r") as f:
                 exports_content = f.read()
         else:
             exports_content = "[FILE DOES NOT EXIST]"
     except Exception as e:
         exports_content = f"[READ ERROR: {e}]"
 
-    # 3) exportfs -v output
+    # 3) exportfs -v output (use nsenter if host file available)
+    exportfs_cmd = (
+        ["nsenter", "-t", "1", "-m", "--", "exportfs", "-v"]
+        if os.path.isfile(host_exports)
+        else ["exportfs", "-v"]
+    )
     try:
-        r = subprocess.run(
-            ["exportfs", "-v"], capture_output=True, text=True, timeout=10
-        )
+        r = subprocess.run(exportfs_cmd, capture_output=True, text=True, timeout=10)
         exportfs_output = r.stdout.strip() or "(empty)"
         exportfs_stderr = r.stderr.strip()
         exportfs_rc = r.returncode
@@ -404,19 +409,40 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
         exportfs_stderr = ""
         exportfs_rc = -1
 
-    # 4) NFS daemon status
+    # 4) NFS daemon status (check via multiple methods for host+container)
     daemons = {}
     for name in ["rpcbind", "rpc.nfsd", "rpc.mountd", "rpc.statd"]:
+        short = name.split(".")[-1]
+        running = False
+        pids = ""
+        # Check container PID namespace
         try:
             r = subprocess.run(
-                ["pidof", name.split(".")[-1]],
+                ["pidof", short],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            daemons[name] = {"running": r.returncode == 0, "pids": r.stdout.strip()}
+            if r.returncode == 0:
+                running = True
+                pids = r.stdout.strip()
         except Exception:
-            daemons[name] = {"running": False, "pids": ""}
+            pass
+        # Check host via /proc/1/root (for privileged containers)
+        if not running:
+            try:
+                r = subprocess.run(
+                    ["nsenter", "-t", "1", "-m", "-p", "--", "pidof", short],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if r.returncode == 0:
+                    running = True
+                    pids = f"host:{r.stdout.strip()}"
+            except Exception:
+                pass
+        daemons[name] = {"running": running, "pids": pids}
 
     # 5) rpcinfo
     try:
@@ -469,6 +495,7 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
         nfs_port_status = f"[ERROR: {e}]"
 
     return {
+        "exports_path_used": exports_path,
         "db_exports": db_exports,
         "etc_exports_content": exports_content,
         "exportfs_v": exportfs_output,
