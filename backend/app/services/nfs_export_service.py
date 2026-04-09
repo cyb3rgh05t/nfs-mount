@@ -387,19 +387,39 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
 
 async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     """Disable a specific export via exportfs -u and update firewall."""
-    cmd = _exportfs_cmd(["-u", f"{export.allowed_hosts}:{export.export_path}"])
-    logger.info(f"disable_export: running {' '.join(cmd)}")
-    result = await _run(cmd)
+    logger.info(
+        f"disable_export: disabling '{export.name}' path={export.export_path} hosts={export.allowed_hosts}"
+    )
+    # 1) Mark as disabled in DB first
     export.enabled = False
     export.is_active = False
-    await db.commit()
-    # Re-write exports file (this export will be excluded now)
-    await write_exports_file(db)
+    await db.flush()
+
+    # 2) Re-write exports file (removes this export from managed block)
+    write_result = await write_exports_file(db)
+    logger.info(f"disable_export: write_exports_file result={write_result}")
+
+    # 3) Unexport specifically
+    cmd = _exportfs_cmd(["-u", f"{export.allowed_hosts}:{export.export_path}"])
+    logger.info(f"disable_export: running {' '.join(cmd)}")
+    unexport_result = await _run(cmd)
+    logger.info(
+        f"disable_export: exportfs -u rc={unexport_result.returncode} "
+        f"stderr={unexport_result.stderr.strip()!r}"
+    )
+
+    # 4) Reload all exports from file (so host manual exports stay active)
     await apply_exports()
-    # Update firewall rules (removes host if no other export uses it)
+
+    # 5) Commit DB changes
+    await db.commit()
+    logger.info(f"disable_export: committed disabled state for '{export.name}'")
+
+    # 6) Update firewall rules
     await firewall_service.apply_export_firewall(db)
-    if result.returncode != 0:
-        return {"success": False, "error": result.stderr.strip()}
+
+    if not write_result["success"]:
+        return write_result
     return {"success": True}
 
 
