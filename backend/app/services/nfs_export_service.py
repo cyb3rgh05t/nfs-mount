@@ -102,9 +102,41 @@ async def apply_exports() -> dict:
     return {"success": True}
 
 
+def _host_nfs_running() -> bool:
+    """Check if the host NFS server is running by reading /proc/fs/nfsd/threads."""
+    try:
+        with open("/proc/fs/nfsd/threads", "r") as f:
+            threads = int(f.read().strip())
+            return threads > 0
+    except Exception:
+        return False
+
+
 async def start_nfs_server() -> dict:
-    """Ensure NFS server daemons are running with fixed ports."""
-    logger.info("start_nfs_server: starting NFS server daemons...")
+    """Ensure NFS server daemons are running with fixed ports.
+
+    With network_mode=host + privileged, the host may already have NFS running.
+    In that case, we only need `exportfs -ra` to reload the exports table.
+    If not, we start the daemons inside the container.
+    """
+    logger.info("start_nfs_server: checking NFS server state...")
+
+    # Check if host NFS server is already running (via /proc/fs/nfsd/threads)
+    if _host_nfs_running():
+        logger.info(
+            "start_nfs_server: host NFS server already running, reloading exports..."
+        )
+        result = await _run(["exportfs", "-ra"])
+        logger.info(
+            f"start_nfs_server: exportfs -ra rc={result.returncode} "
+            f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
+        )
+        if result.returncode != 0:
+            return {"success": False, "error": result.stderr.strip()}
+        return {"success": True}
+
+    # Host NFS not running — start daemons ourselves
+    logger.info("start_nfs_server: host NFS not running, starting daemons...")
 
     # Ensure /proc/fs/nfsd is mounted (required for kernel NFS server)
     r = await _run(["mountpoint", "-q", "/proc/fs/nfsd"])
@@ -138,7 +170,8 @@ async def start_nfs_server() -> dict:
     # Export the filesystems
     result = await _run(["exportfs", "-ra"])
     logger.info(
-        f"start_nfs_server: exportfs -ra rc={result.returncode} stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
+        f"start_nfs_server: exportfs -ra rc={result.returncode} "
+        f"stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
     )
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}

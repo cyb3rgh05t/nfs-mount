@@ -431,6 +431,43 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         rpcinfo = f"[ERROR: {e}]"
 
+    # 6) /proc/fs/nfsd/threads (shows if host NFS server is running)
+    nfsd_threads = ""
+    try:
+        if os.path.isfile("/proc/fs/nfsd/threads"):
+            with open("/proc/fs/nfsd/threads", "r") as f:
+                nfsd_threads = f.read().strip()
+        else:
+            nfsd_threads = "[/proc/fs/nfsd/threads DOES NOT EXIST]"
+    except Exception as e:
+        nfsd_threads = f"[READ ERROR: {e}]"
+
+    # 7) Check if /etc/exports is bind-mounted from host
+    exports_mount = ""
+    try:
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                if "/etc/exports" in line:
+                    exports_mount = line.strip()
+                    break
+            if not exports_mount:
+                exports_mount = (
+                    "[NOT bind-mounted — container has its own /etc/exports!]"
+                )
+    except Exception as e:
+        exports_mount = f"[ERROR: {e}]"
+
+    # 8) ss/netstat check for NFS port 2049
+    nfs_port_status = ""
+    try:
+        r = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=5)
+        nfs_lines = [l for l in r.stdout.split("\n") if ":2049 " in l or ":111 " in l]
+        nfs_port_status = (
+            "\n".join(nfs_lines) if nfs_lines else "(ports 111/2049 not listening)"
+        )
+    except Exception as e:
+        nfs_port_status = f"[ERROR: {e}]"
+
     return {
         "db_exports": db_exports,
         "etc_exports_content": exports_content,
@@ -439,4 +476,7 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
         "exportfs_rc": exportfs_rc,
         "nfs_daemons": daemons,
         "rpcinfo": rpcinfo,
+        "nfsd_threads": nfsd_threads,
+        "exports_bind_mount": exports_mount,
+        "nfs_port_listening": nfs_port_status,
     }
