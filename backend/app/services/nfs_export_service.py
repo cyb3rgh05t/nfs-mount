@@ -132,8 +132,67 @@ async def get_active_exports() -> list[str]:
     return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
 
 
+def get_system_exports() -> list[dict]:
+    """Parse /etc/exports and return non-managed entries (manual exports)."""
+    if not os.path.isfile(EXPORTS_FILE):
+        return []
+    entries = []
+    in_managed = False
+    try:
+        with open(EXPORTS_FILE, "r") as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped == MANAGED_BEGIN:
+                    in_managed = True
+                    continue
+                if stripped == MANAGED_END:
+                    in_managed = False
+                    continue
+                if in_managed or not stripped or stripped.startswith("#"):
+                    continue
+                # Parse: /path host(options) [host2(options2) ...]
+                parts = stripped.split()
+                if len(parts) >= 2:
+                    export_path = parts[0]
+                    # Combine remaining parts as host(options) pairs
+                    host_parts = parts[1:]
+                    for hp in host_parts:
+                        # Split host(options) → host, options
+                        if "(" in hp and hp.endswith(")"):
+                            host = hp[: hp.index("(")]
+                            options = hp[hp.index("(") + 1 : -1]
+                        else:
+                            host = hp
+                            options = ""
+                        entries.append(
+                            {
+                                "export_path": export_path,
+                                "allowed_hosts": host,
+                                "options": options,
+                                "source": "system",
+                            }
+                        )
+                elif len(parts) == 1:
+                    entries.append(
+                        {
+                            "export_path": parts[0],
+                            "allowed_hosts": "*",
+                            "options": "",
+                            "source": "system",
+                        }
+                    )
+    except Exception as e:
+        logger.error(f"Failed to parse {EXPORTS_FILE}: {e}")
+    return entries
+
+
 async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
     """Enable an export: write /etc/exports, start NFS server, and update firewall."""
+    # Mark as enabled first so write_exports_file includes it
+    export.enabled = True
+    export.is_active = False  # will be set True after NFS server starts
+    await db.flush()
+
     write_result = await write_exports_file(db)
     if not write_result["success"]:
         return write_result
@@ -154,9 +213,10 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     result = await _run(
         ["exportfs", "-u", f"{export.allowed_hosts}:{export.export_path}"]
     )
+    export.enabled = False
     export.is_active = False
     await db.commit()
-    # Re-write exports file
+    # Re-write exports file (this export will be excluded now)
     await write_exports_file(db)
     await apply_exports()
     # Update firewall rules (removes host if no other export uses it)

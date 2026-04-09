@@ -12,6 +12,7 @@ import {
   XCircle,
   RefreshCw,
   Save,
+  FileText,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -58,6 +59,10 @@ const inputClass =
 export default function NFSExportsPage() {
   const [exports, setExports] = useCachedState("nfs-exports", []);
   const [statuses, setStatuses] = useCachedState("nfs-export-statuses", {});
+  const [systemExports, setSystemExports] = useCachedState(
+    "nfs-system-exports",
+    [],
+  );
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
@@ -77,14 +82,16 @@ export default function NFSExportsPage() {
 
   const fetchData = async () => {
     try {
-      const [e, s] = await Promise.all([
+      const [e, s, sys] = await Promise.all([
         api.getNFSExports(),
         api.getNFSExportsStatus().catch(() => []),
+        api.getSystemExports().catch(() => []),
       ]);
       setExports(e);
       const statusMap = {};
       s.forEach((st) => (statusMap[st.id] = st));
       setStatuses(statusMap);
+      setSystemExports(sys);
     } catch (e) {
       setError(e.message);
     }
@@ -387,6 +394,52 @@ export default function NFSExportsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* System Exports (manual /etc/exports entries) */}
+      {systemExports.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-nfs-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            System Exports (manual)
+          </h2>
+          <div className="space-y-2">
+            {systemExports.map((exp, i) => (
+              <div
+                key={i}
+                className="bg-nfs-card/50 border border-nfs-border/50 rounded-xl p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-400 flex-shrink-0" />
+                  <span className="font-mono text-sm text-white flex-1 truncate">
+                    {exp.export_path}
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                    System
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Allowed Hosts
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {exp.allowed_hosts}
+                    </p>
+                  </div>
+                  <div className="bg-nfs-input/80 border border-nfs-border/50 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                      Options
+                    </p>
+                    <p className="text-xs text-white font-mono truncate mt-0.5">
+                      {exp.options || "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

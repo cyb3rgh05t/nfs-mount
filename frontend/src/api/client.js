@@ -87,6 +87,7 @@ const api = {
   enableNFSExport: (id) => request("POST", `/nfs/exports/${id}/enable`),
   disableNFSExport: (id) => request("POST", `/nfs/exports/${id}/disable`),
   getNFSExportsStatus: () => request("GET", "/nfs/exports-status"),
+  getSystemExports: () => request("GET", "/nfs/exports-system"),
   applyNFSExports: () => request("POST", "/nfs/exports-apply"),
 
   // Firewall

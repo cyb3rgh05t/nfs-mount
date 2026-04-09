@@ -322,6 +322,12 @@ async def get_all_export_statuses(db: AsyncSession = Depends(get_db)):
     return statuses
 
 
+@router.get("/exports-system")
+async def get_system_exports():
+    """Get manually configured exports from /etc/exports (non-managed)."""
+    return nfs_export_service.get_system_exports()
+
+
 @router.post("/exports-apply")
 async def apply_all_exports(db: AsyncSession = Depends(get_db)):
     """Write all exports to /etc/exports and apply."""
