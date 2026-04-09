@@ -73,3 +73,15 @@ async def get_logs(lines: int = Query(100, ge=1, le=1000)):
 @router.get("/docker-info")
 async def docker_info():
     return system_service.get_docker_info()
+
+
+@router.get("/nfs-threads")
+async def get_nfs_threads():
+    return system_service.get_nfs_threads()
+
+
+@router.post("/nfs-threads")
+async def set_nfs_threads(data: dict):
+    count = data.get("threads", 512)
+    logger.info("Setting NFS threads to %d", count)
+    return await system_service.set_nfs_threads(count)

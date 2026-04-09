@@ -369,6 +369,31 @@ def get_docker_info() -> dict:
     return info
 
 
+def get_nfs_threads() -> dict:
+    """Get current NFS server thread count."""
+    current = 0
+    try:
+        with open("/proc/fs/nfsd/threads", "r") as f:
+            current = int(f.read().strip())
+    except Exception:
+        pass
+    return {"current": current}
+
+
+async def set_nfs_threads(count: int) -> dict:
+    """Set NFS server thread count at runtime."""
+    if count < 1 or count > 4096:
+        return {"success": False, "error": "Thread count must be between 1 and 4096"}
+    try:
+        with open("/proc/fs/nfsd/threads", "w") as f:
+            f.write(str(count))
+        logger.info(f"NFS threads set to {count}")
+        return {"success": True, "threads": count}
+    except Exception as e:
+        logger.error(f"Failed to set NFS threads: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # ── Persistent Settings helpers ──────────────────────────────────────────────
 
 

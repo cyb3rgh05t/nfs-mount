@@ -146,6 +146,7 @@ export default function SettingsPage() {
   const [kernelParams, setKernelParams] = useCachedState("settings-kernel", []);
   const [dockerInfo, setDockerInfo] = useCachedState("settings-docker", null);
   const [rpsXps, setRpsXps] = useCachedState("settings-rpsxps", null);
+  const [nfsThreads, setNfsThreads] = useCachedState("settings-nfsthreads", null);
   const [apiKeys, setApiKeys] = useCachedState("settings-apikeys", []);
   const [sshKeys, setSSHKeys] = useCachedState("settings-sshkeys", []);
   const [uploading, setUploading] = useState(false);
@@ -195,7 +196,7 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [notifs, params, docker, keys, users, rpsxps, fwStatus] =
+      const [notifs, params, docker, keys, users, rpsxps, fwStatus, nfsT] =
         await Promise.all([
           api.getNotificationConfigs().catch(() => []),
           api.getKernelParams().catch(() => []),
@@ -204,6 +205,7 @@ export default function SettingsPage() {
           user?.is_admin ? api.getUsers().catch(() => []) : Promise.resolve([]),
           api.getRpsXps().catch(() => null),
           api.getFirewallStatus().catch(() => null),
+          api.getNfsThreads().catch(() => null),
         ]);
       setConfigs(notifs);
       setKernelParams(params);
@@ -212,6 +214,7 @@ export default function SettingsPage() {
       setAllUsers(users);
       setRpsXps(rpsxps);
       setFirewallStatus(fwStatus);
+      setNfsThreads(nfsT);
 
       const discord = notifs.find((n) => n.type === "discord");
       if (discord) {
@@ -1336,6 +1339,67 @@ export default function SettingsPage() {
             ) : (
               <p className="text-sm text-nfs-muted">No parameters available</p>
             )}
+          </div>
+
+          {/* NFS Server Threads */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    NFS Server Threads
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    Worker threads for NFS export serving (default: 512)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const val = nfsThreads?.current || 512;
+                    const result = await api.setNfsThreads(val);
+                    if (result.success) {
+                      toast.success(`NFS threads set to ${val}`);
+                      const fresh = await api.getNfsThreads().catch(() => null);
+                      setNfsThreads(fresh);
+                    } else {
+                      toast.error(result.error || "Failed to set NFS threads");
+                    }
+                  } catch (e) {
+                    toast.error(e.message);
+                  }
+                }}
+                className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+              >
+                <Zap className="w-4 h-4 text-nfs-primary" />
+                Apply
+              </button>
+            </div>
+            <div className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2">
+              <span className="text-xs text-nfs-text flex-1 min-w-0">
+                Active NFS Threads
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="4096"
+                className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                value={nfsThreads?.current ?? ""}
+                onChange={(e) =>
+                  setNfsThreads((prev) => ({
+                    ...prev,
+                    current: parseInt(e.target.value) || 0,
+                  }))
+                }
+              />
+            </div>
+            <p className="text-[10px] text-nfs-muted mt-2 px-1">
+              More threads = more parallel NFS client requests. For 80+ streams use 512+. Default via NFS_THREADS env var.
+            </p>
           </div>
 
           {/* RPS/XPS CPU Load Balancing */}

@@ -131,6 +131,9 @@ const api = {
   applyRpsXps: (settings) => request("POST", "/system/rps-xps", settings),
   getLogs: (lines = 100) => request("GET", `/system/logs?lines=${lines}`),
   getDockerInfo: () => request("GET", "/system/docker-info"),
+  getNfsThreads: () => request("GET", "/system/nfs-threads"),
+  setNfsThreads: (threads) =>
+    request("POST", "/system/nfs-threads", { threads }),
 
   // Notifications
   getNotificationConfigs: () => request("GET", "/notifications/configs"),
