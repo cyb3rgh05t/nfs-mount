@@ -206,6 +206,7 @@ async def health_check():
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(api_keys.router, prefix="/api/api-keys", tags=["API Keys"])
 app.include_router(nfs.router, prefix="/api/nfs", tags=["NFS"])
+app.include_router(nfs.debug_router, prefix="/api/nfs", tags=["NFS Debug"])
 app.include_router(mergerfs.router, prefix="/api/mergerfs", tags=["MergerFS"])
 app.include_router(vpn.router, prefix="/api/vpn", tags=["VPN"])
 app.include_router(server_monitor.router, prefix="/api/monitor", tags=["Monitor"])

@@ -28,6 +28,9 @@ logger = logging.getLogger("nfs-manager.router.nfs")
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
+# Separate router without auth for debug endpoints
+debug_router = APIRouter()
+
 
 @router.get("/mounts", response_model=list[NFSMountResponse])
 async def list_nfs_mounts(db: AsyncSession = Depends(get_db)):
@@ -355,7 +358,7 @@ async def apply_all_exports(db: AsyncSession = Depends(get_db)):
     return result
 
 
-@router.get("/exports-debug")
+@debug_router.get("/exports-debug")
 async def debug_exports(db: AsyncSession = Depends(get_db)):
     """Debug endpoint: show current state of NFS exports system."""
     import os
