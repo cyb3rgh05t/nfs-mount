@@ -20,6 +20,7 @@ services:
       - "NFS_THREADS=512"
     restart: "unless-stopped"
     network_mode: "host"
+    pid: "host"
     privileged: true
     cap_add:
       - SYS_ADMIN

@@ -433,8 +433,15 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
             try:
                 r = subprocess.run(
                     [
-                        "nsenter", "-t", "1", "-m", "-p", "--mount-proc",
-                        "--", "pidof", short,
+                        "nsenter",
+                        "-t",
+                        "1",
+                        "-m",
+                        "-p",
+                        "--mount-proc",
+                        "--",
+                        "pidof",
+                        short,
                     ],
                     capture_output=True,
                     text=True,
@@ -451,7 +458,9 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
     try:
         r = subprocess.run(
             ["nsenter", "-t", "1", "-m", "-n", "--", "rpcinfo", "-p"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         rpcinfo = (
             r.stdout.strip()
