@@ -44,12 +44,18 @@ async def write_exports_file(db: AsyncSession) -> dict:
         select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
     )
     exports = result.scalars().all()
+    logger.info(f"write_exports_file: found {len(exports)} enabled exports")
 
     # Read existing file (preserve non-managed content)
     existing_lines: list[str] = []
     if os.path.isfile(EXPORTS_FILE):
         with open(EXPORTS_FILE, "r") as f:
             existing_lines = f.readlines()
+        logger.info(
+            f"write_exports_file: existing file has {len(existing_lines)} lines"
+        )
+    else:
+        logger.info("write_exports_file: /etc/exports does not exist yet")
 
     # Remove old managed block
     new_lines: list[str] = []
@@ -68,7 +74,9 @@ async def write_exports_file(db: AsyncSession) -> dict:
     # Build managed block
     managed = [MANAGED_BEGIN + "\n"]
     for exp in exports:
-        managed.append(_build_export_line(exp) + "\n")
+        line = _build_export_line(exp)
+        logger.info(f"write_exports_file: adding export line: {line}")
+        managed.append(line + "\n")
     managed.append(MANAGED_END + "\n")
 
     # Combine
@@ -77,6 +85,7 @@ async def write_exports_file(db: AsyncSession) -> dict:
     try:
         with open(EXPORTS_FILE, "w") as f:
             f.writelines(final)
+        logger.info(f"write_exports_file: wrote {len(final)} lines to {EXPORTS_FILE}")
         return {"success": True}
     except Exception as e:
         logger.error(f"Failed to write {EXPORTS_FILE}: {e}")
@@ -95,16 +104,29 @@ async def apply_exports() -> dict:
 
 async def start_nfs_server() -> dict:
     """Ensure NFS server daemons are running with fixed ports."""
+    logger.info("start_nfs_server: starting NFS server daemons...")
     # Start rpcbind if not running
-    await _run(["rpcbind"])
+    r = await _run(["rpcbind"])
+    logger.info(
+        f"start_nfs_server: rpcbind rc={r.returncode} stderr={r.stderr.strip()!r}"
+    )
     # Start statd with fixed port
-    await _run(["rpc.statd", "--port", str(firewall_service.STATD_PORT)])
+    r = await _run(["rpc.statd", "--port", str(firewall_service.STATD_PORT)])
+    logger.info(
+        f"start_nfs_server: rpc.statd rc={r.returncode} stderr={r.stderr.strip()!r}"
+    )
     # Export the filesystems
     result = await _run(["exportfs", "-ra"])
+    logger.info(
+        f"start_nfs_server: exportfs -ra rc={result.returncode} stdout={result.stdout.strip()!r} stderr={result.stderr.strip()!r}"
+    )
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}
     # Start nfsd with configured thread count
     result = await _run(["rpc.nfsd", str(settings.nfs_threads)])
+    logger.info(
+        f"start_nfs_server: rpc.nfsd {settings.nfs_threads} rc={result.returncode} stderr={result.stderr.strip()!r}"
+    )
     if (
         result.returncode != 0
         and "already running" not in (result.stderr or "").lower()
@@ -112,11 +134,15 @@ async def start_nfs_server() -> dict:
         return {"success": False, "error": result.stderr.strip()}
     # Start mountd with fixed port
     result = await _run(["rpc.mountd", "--port", str(firewall_service.MOUNTD_PORT)])
+    logger.info(
+        f"start_nfs_server: rpc.mountd rc={result.returncode} stderr={result.stderr.strip()!r}"
+    )
     if (
         result.returncode != 0
         and "already running" not in (result.stderr or "").lower()
     ):
         return {"success": False, "error": result.stderr.strip()}
+    logger.info("start_nfs_server: all daemons started successfully")
     return {"success": True}
 
 
@@ -188,21 +214,28 @@ def get_system_exports() -> list[dict]:
 
 async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
     """Enable an export: write /etc/exports, start NFS server, and update firewall."""
+    logger.info(
+        f"enable_export: enabling '{export.name}' path={export.export_path} hosts={export.allowed_hosts}"
+    )
     # Mark as enabled first so write_exports_file includes it
     export.enabled = True
     export.is_active = False  # will be set True after NFS server starts
     await db.flush()
+    logger.info(f"enable_export: flushed enabled=True for '{export.name}'")
 
     write_result = await write_exports_file(db)
+    logger.info(f"enable_export: write_exports_file result={write_result}")
     if not write_result["success"]:
         return write_result
     # Ensure NFS server daemons are running (also calls exportfs -ra internally)
     server_result = await start_nfs_server()
+    logger.info(f"enable_export: start_nfs_server result={server_result}")
     if not server_result["success"]:
         logger.error(f"NFS server start failed: {server_result.get('error')}")
         return server_result
     export.is_active = True
     await db.commit()
+    logger.info(f"enable_export: committed is_active=True for '{export.name}'")
     # Update firewall rules to allow the new host
     await firewall_service.apply_export_firewall(db)
     return server_result

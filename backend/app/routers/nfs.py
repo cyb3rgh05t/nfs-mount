@@ -353,3 +353,87 @@ async def apply_all_exports(db: AsyncSession = Depends(get_db)):
             {"Exports": str(len(enabled_exports)), "Paths": paths},
         )
     return result
+
+
+@router.get("/exports-debug")
+async def debug_exports(db: AsyncSession = Depends(get_db)):
+    """Debug endpoint: show current state of NFS exports system."""
+    import os
+    import subprocess
+
+    # 1) DB state
+    result = await db.execute(select(NFSExport))
+    db_exports = []
+    for exp in result.scalars().all():
+        db_exports.append(
+            {
+                "id": exp.id,
+                "name": exp.name,
+                "export_path": exp.export_path,
+                "allowed_hosts": exp.allowed_hosts,
+                "enabled": exp.enabled,
+                "is_active": exp.is_active,
+                "auto_enable": exp.auto_enable,
+            }
+        )
+
+    # 2) /etc/exports file content
+    exports_content = ""
+    try:
+        if os.path.isfile("/etc/exports"):
+            with open("/etc/exports", "r") as f:
+                exports_content = f.read()
+        else:
+            exports_content = "[FILE DOES NOT EXIST]"
+    except Exception as e:
+        exports_content = f"[READ ERROR: {e}]"
+
+    # 3) exportfs -v output
+    try:
+        r = subprocess.run(
+            ["exportfs", "-v"], capture_output=True, text=True, timeout=10
+        )
+        exportfs_output = r.stdout.strip() or "(empty)"
+        exportfs_stderr = r.stderr.strip()
+        exportfs_rc = r.returncode
+    except Exception as e:
+        exportfs_output = f"[ERROR: {e}]"
+        exportfs_stderr = ""
+        exportfs_rc = -1
+
+    # 4) NFS daemon status
+    daemons = {}
+    for name in ["rpcbind", "rpc.nfsd", "rpc.mountd", "rpc.statd"]:
+        try:
+            r = subprocess.run(
+                ["pidof", name.split(".")[-1]],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            daemons[name] = {"running": r.returncode == 0, "pids": r.stdout.strip()}
+        except Exception:
+            daemons[name] = {"running": False, "pids": ""}
+
+    # 5) rpcinfo
+    try:
+        r = subprocess.run(
+            ["rpcinfo", "-p"], capture_output=True, text=True, timeout=10
+        )
+        rpcinfo = (
+            r.stdout.strip()
+            if r.returncode == 0
+            else f"[ERROR rc={r.returncode}: {r.stderr.strip()}]"
+        )
+    except Exception as e:
+        rpcinfo = f"[ERROR: {e}]"
+
+    return {
+        "db_exports": db_exports,
+        "etc_exports_content": exports_content,
+        "exportfs_v": exportfs_output,
+        "exportfs_stderr": exportfs_stderr,
+        "exportfs_rc": exportfs_rc,
+        "nfs_daemons": daemons,
+        "rpcinfo": rpcinfo,
+    }
