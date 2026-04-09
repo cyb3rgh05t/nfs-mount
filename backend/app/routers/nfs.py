@@ -409,47 +409,31 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
         exportfs_stderr = ""
         exportfs_rc = -1
 
-    # 4) NFS daemon status (check via multiple methods for host+container)
+    # 4) NFS daemon status
     daemons = {}
-    for name in ["rpcbind", "rpc.nfsd", "rpc.mountd", "rpc.statd"]:
-        short = name.split(".")[-1]
+    # Map display name → possible process names for pidof
+    daemon_names = {
+        "rpcbind": ["rpcbind"],
+        "rpc.nfsd": ["nfsd"],
+        "rpc.mountd": ["rpc.mountd", "mountd"],
+        "rpc.statd": ["rpc.statd", "statd"],
+    }
+    for name, candidates in daemon_names.items():
         running = False
         pids = ""
-        # Check container PID namespace
-        try:
-            r = subprocess.run(
-                ["pidof", short],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if r.returncode == 0:
-                running = True
-                pids = r.stdout.strip()
-        except Exception:
-            pass
-        # Check host via nsenter (use --mount-proc to remount /proc in host PID ns)
-        if not running:
+        for proc_name in candidates:
+            if running:
+                break
             try:
                 r = subprocess.run(
-                    [
-                        "nsenter",
-                        "-t",
-                        "1",
-                        "-m",
-                        "-p",
-                        "--mount-proc",
-                        "--",
-                        "pidof",
-                        short,
-                    ],
+                    ["pidof", proc_name],
                     capture_output=True,
                     text=True,
                     timeout=5,
                 )
                 if r.returncode == 0:
                     running = True
-                    pids = f"host:{r.stdout.strip()}"
+                    pids = r.stdout.strip()
             except Exception:
                 pass
         daemons[name] = {"running": running, "pids": pids}
