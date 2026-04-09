@@ -1,4 +1,5 @@
 import logging
+import os
 import socket
 from dataclasses import dataclass
 from datetime import datetime
@@ -6,6 +7,23 @@ from datetime import datetime
 import httpx
 
 from ..config import settings
+
+
+def _get_server_name() -> str:
+    """Get server name for notifications. Priority: SERVER_NAME env > host hostname > container hostname."""
+    if settings.server_name:
+        return settings.server_name
+    # Try to read the real host hostname (works when /etc/hostname is from the host)
+    try:
+        with open("/etc/hostname_host", "r") as f:
+            name = f.read().strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    return socket.gethostname()
+
+
 from ..database import async_session
 from ..models.notification import NotificationConfig
 from sqlalchemy import select
@@ -83,11 +101,11 @@ async def send_discord(
     color = color_map.get(status, 3447003)
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-    hostname = socket.gethostname()
+    server_name = _get_server_name()
 
     fields = [
         {"name": "**Status**", "value": f"`{status}`", "inline": True},
-        {"name": "**Server**", "value": f"`{hostname}`", "inline": True},
+        {"name": "**Server**", "value": f"`{server_name}`", "inline": True},
     ]
     if details:
         # Add a blank inline field to force a new row
@@ -133,7 +151,7 @@ async def send_telegram(
     }
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%H:%M:%S | %d.%m.%Y")
-    hostname = socket.gethostname()
+    server_name = _get_server_name()
 
     detail_lines = ""
     if details:
@@ -146,7 +164,7 @@ async def send_telegram(
         f"<b>{emoji} NFS-MergerFS Manager</b>\n"
         f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
         f"<b>Status:</b> <code>{status}</code>\n"
-        f"<b>Server:</b> <code>{hostname}</code>\n\n"
+        f"<b>Server:</b> <code>{server_name}</code>\n\n"
         f"<b>Meldung:</b>\n<i>{message}</i>\n"
         f"{detail_lines}\n"
         f"<code>{now}</code>"

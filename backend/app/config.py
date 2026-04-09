@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     telegram_topic_id: str = ""
     log_file: str = "/var/log/nfs-manager/nfs-manager.log"
 
+    # Server identification for notifications
+    server_name: str = ""
+
     # JWT Auth
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

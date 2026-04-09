@@ -16,6 +16,7 @@ services:
       - "TELEGRAM_BOT_TOKEN="
       - "TELEGRAM_CHAT_ID="
       - "TELEGRAM_TOPIC_ID="
+      - "SERVER_NAME="
     restart: "unless-stopped"
     network_mode: "host"
     privileged: true
@@ -29,3 +30,4 @@ services:
       - "/opt/appdata/nfs-mount/ssh:/config/ssh"
       - "/mnt:/mnt:rshared"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/etc/hostname:/etc/hostname_host:ro"
