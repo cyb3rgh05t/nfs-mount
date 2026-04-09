@@ -129,14 +129,19 @@ def get_kernel_params() -> list[dict]:
     """Read current kernel tuning parameters relevant to NFS."""
     params = [
         "sunrpc.tcp_max_slot_table_entries",
+        "sunrpc.udp_slot_table_entries",
         "net.core.rmem_max",
         "net.core.wmem_max",
         "net.core.rmem_default",
         "net.core.wmem_default",
         "net.core.default_qdisc",
+        "net.core.netdev_budget",
+        "net.core.optmem_max",
         "net.ipv4.tcp_congestion_control",
         "net.ipv4.tcp_rmem",
         "net.ipv4.tcp_wmem",
+        "net.netfilter.nf_conntrack_max",
+        "net.netfilter.nf_conntrack_tcp_timeout_established",
         "vm.dirty_ratio",
         "vm.dirty_background_ratio",
         "vm.vfs_cache_pressure",
@@ -162,7 +167,13 @@ async def apply_kernel_tuning(
         name = p["name"]
         value = p["value"]
         # Basic validation – only allow known sysctl paths
-        allowed_prefixes = ("sunrpc.", "net.core.", "net.ipv4.", "vm.")
+        allowed_prefixes = (
+            "sunrpc.",
+            "net.core.",
+            "net.ipv4.",
+            "net.netfilter.",
+            "vm.",
+        )
         if not any(name.startswith(pfx) for pfx in allowed_prefixes):
             results.append(
                 {"name": name, "success": False, "error": "Parameter not allowed"}

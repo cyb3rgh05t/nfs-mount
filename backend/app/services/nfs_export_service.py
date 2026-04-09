@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.nfs_export import NFSExport
 from ..services import firewall_service
+from ..config import settings
 
 logger = logging.getLogger("nfs-manager.service.nfs_export")
 
@@ -102,8 +103,8 @@ async def start_nfs_server() -> dict:
     result = await _run(["exportfs", "-ra"])
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}
-    # Start nfsd
-    result = await _run(["rpc.nfsd", "8"])
+    # Start nfsd with configured thread count
+    result = await _run(["rpc.nfsd", str(settings.nfs_threads)])
     if (
         result.returncode != 0
         and "already running" not in (result.stderr or "").lower()

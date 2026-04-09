@@ -17,6 +17,7 @@ services:
       - "TELEGRAM_CHAT_ID="
       - "TELEGRAM_TOPIC_ID="
       - "SERVER_NAME="
+      - "NFS_THREADS=512"
     restart: "unless-stopped"
     network_mode: "host"
     privileged: true

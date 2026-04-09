@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # Server identification for notifications
     server_name: str = ""
 
+    # NFS server threads (for exports)
+    nfs_threads: int = 512
+
     # JWT Auth
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

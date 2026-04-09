@@ -10,6 +10,7 @@ echo "[TUNING] Applying kernel parameters for high-throughput NFS streaming..."
 
 # NFS/SUNRPC: increase concurrent RPC slots (default 65 -> 128)
 sysctl -w sunrpc.tcp_max_slot_table_entries=128 2>/dev/null || true
+sysctl -w sunrpc.udp_slot_table_entries=128 2>/dev/null || true
 
 # Network buffers: 128MB for high-throughput 10G links
 sysctl -w net.core.rmem_max=134217728 2>/dev/null || true
@@ -34,6 +35,15 @@ sysctl -w net.ipv4.tcp_congestion_control=bbr 2>/dev/null || true
 sysctl -w vm.dirty_ratio=40 2>/dev/null || true
 sysctl -w vm.dirty_background_ratio=10 2>/dev/null || true
 sysctl -w vm.vfs_cache_pressure=50 2>/dev/null || true
+
+# Connection tracking for many concurrent NFS clients
+sysctl -w net.netfilter.nf_conntrack_max=524288 2>/dev/null || true
+sysctl -w net.netfilter.nf_conntrack_tcp_timeout_established=86400 2>/dev/null || true
+
+# Network device budget for high-throughput
+sysctl -w net.core.netdev_budget=600 2>/dev/null || true
+sysctl -w net.core.netdev_budget_usecs=8000 2>/dev/null || true
+sysctl -w net.core.optmem_max=262144 2>/dev/null || true
 
 echo "[TUNING] Kernel parameters applied."
 
@@ -94,13 +104,15 @@ echo "options lockd nlm_udpport=$NLOCKMGR_PORT nlm_tcpport=$NLOCKMGR_PORT" > /et
 sysctl -w fs.nfs.nlm_tcpport=$NLOCKMGR_PORT 2>/dev/null || true
 sysctl -w fs.nfs.nlm_udpport=$NLOCKMGR_PORT 2>/dev/null || true
 
-# Configure mountd fixed port in /etc/default/nfs-kernel-server
+# Configure mountd fixed port and NFS threads in /etc/default/nfs-kernel-server
+NFS_THREADS=${NFS_THREADS:-512}
 cat > /etc/default/nfs-kernel-server 2>/dev/null <<EOF
 RPCMOUNTDOPTS="--port $MOUNTD_PORT"
-RPCNFSDCOUNT=8
+RPCNFSDCOUNT=$NFS_THREADS
 EOF
 
 echo "[NFS] Fixed ports: mountd=$MOUNTD_PORT, nlockmgr=$NLOCKMGR_PORT, statd=$STATD_PORT"
+echo "[NFS] NFS server threads: $NFS_THREADS"
 
 # ── Clean stale mounts & ensure directories ──
 for mp in /mnt/downloads /mnt/unionfs; do
