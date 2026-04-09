@@ -105,6 +105,22 @@ async def apply_exports() -> dict:
 async def start_nfs_server() -> dict:
     """Ensure NFS server daemons are running with fixed ports."""
     logger.info("start_nfs_server: starting NFS server daemons...")
+
+    # Ensure /proc/fs/nfsd is mounted (required for kernel NFS server)
+    r = await _run(["mountpoint", "-q", "/proc/fs/nfsd"])
+    if r.returncode != 0:
+        logger.info("start_nfs_server: mounting /proc/fs/nfsd...")
+        await _run(["modprobe", "nfsd"])
+        await _run(["mkdir", "-p", "/proc/fs/nfsd"])
+        r = await _run(["mount", "-t", "nfsd", "nfsd", "/proc/fs/nfsd"])
+        logger.info(f"start_nfs_server: mount nfsd rc={r.returncode} stderr={r.stderr.strip()!r}")
+
+    # Ensure rpc_pipefs is mounted
+    r = await _run(["mountpoint", "-q", "/var/lib/nfs/rpc_pipefs"])
+    if r.returncode != 0:
+        await _run(["mkdir", "-p", "/var/lib/nfs/rpc_pipefs"])
+        await _run(["mount", "-t", "rpc_pipefs", "rpc_pipefs", "/var/lib/nfs/rpc_pipefs"])
+
     # Start rpcbind if not running
     r = await _run(["rpcbind"])
     logger.info(

@@ -114,6 +114,25 @@ EOF
 echo "[NFS] Fixed ports: mountd=$MOUNTD_PORT, nlockmgr=$NLOCKMGR_PORT, statd=$STATD_PORT"
 echo "[NFS] NFS server threads: $NFS_THREADS"
 
+# ── Mount nfsd filesystem (required for NFS server in containers) ──
+if [ ! -d /proc/fs/nfsd ] || ! mountpoint -q /proc/fs/nfsd 2>/dev/null; then
+    echo "[NFS] Mounting /proc/fs/nfsd..."
+    modprobe nfsd 2>/dev/null || true
+    mkdir -p /proc/fs/nfsd 2>/dev/null || true
+    mount -t nfsd nfsd /proc/fs/nfsd 2>/dev/null || true
+fi
+if mountpoint -q /proc/fs/nfsd 2>/dev/null; then
+    echo "[NFS] /proc/fs/nfsd mounted successfully"
+else
+    echo "[NFS] WARNING: Could not mount /proc/fs/nfsd — NFS server exports will not work"
+fi
+
+# Mount rpc_pipefs if needed
+if [ ! -d /var/lib/nfs/rpc_pipefs ] || ! mountpoint -q /var/lib/nfs/rpc_pipefs 2>/dev/null; then
+    mkdir -p /var/lib/nfs/rpc_pipefs 2>/dev/null || true
+    mount -t rpc_pipefs rpc_pipefs /var/lib/nfs/rpc_pipefs 2>/dev/null || true
+fi
+
 # ── Clean stale mounts & ensure directories ──
 for mp in /mnt/downloads /mnt/unionfs; do
     if mountpoint -q "$mp" 2>/dev/null; then
