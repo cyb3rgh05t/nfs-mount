@@ -5,6 +5,7 @@ import {
   HardDrive,
   MemoryStick,
   LayoutDashboard,
+  Lock,
   Network,
   Shield,
   GitMerge,
@@ -71,21 +72,27 @@ export default function DashboardPage() {
   const [vpnStatus, setVpnStatus] = useCachedState("dash-vpn", []);
   const [kernelParams, setKernelParams] = useCachedState("dash-kernel", []);
   const [rpsXps, setRpsXps] = useCachedState("dash-rpsxps", null);
+  const [firewallStatus, setFirewallStatus] = useCachedState(
+    "dash-firewall",
+    null,
+  );
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [st, sys, nfs, merger, exports, vpn, kp, rps] = await Promise.all([
-        api.getSystemStatus(),
-        api.getSystemStats(),
-        api.getNFSStatus().catch(() => []),
-        api.getMergerFSStatus().catch(() => []),
-        api.getNFSExportsStatus().catch(() => []),
-        api.getAllVPNStatus().catch(() => []),
-        api.getKernelParams().catch(() => []),
-        api.getRpsXps().catch(() => null),
-      ]);
+      const [st, sys, nfs, merger, exports, vpn, kp, rps, fw] =
+        await Promise.all([
+          api.getSystemStatus(),
+          api.getSystemStats(),
+          api.getNFSStatus().catch(() => []),
+          api.getMergerFSStatus().catch(() => []),
+          api.getNFSExportsStatus().catch(() => []),
+          api.getAllVPNStatus().catch(() => []),
+          api.getKernelParams().catch(() => []),
+          api.getRpsXps().catch(() => null),
+          api.getFirewallStatus().catch(() => null),
+        ]);
       setStatus(st);
       setStats(sys);
       setNfsStatus(nfs);
@@ -94,6 +101,7 @@ export default function DashboardPage() {
       setVpnStatus(vpn);
       setKernelParams(kp);
       setRpsXps(rps);
+      setFirewallStatus(fw);
       setError("");
     } catch (e) {
       setError(e.message);
@@ -278,9 +286,7 @@ export default function DashboardPage() {
             </span>
           </div>
           {mergerStatus.length === 0 ? (
-            <InfoBox type="warning">
-              No MergerFS configs configured
-            </InfoBox>
+            <InfoBox type="warning">No MergerFS configs configured</InfoBox>
           ) : (
             <div className="space-y-2">
               {mergerStatus.map((c) => (
@@ -356,8 +362,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* VPN & Kernel Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      {/* VPN, Firewall & Kernel Info */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <div
           onClick={() => navigate("/vpn")}
           className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
@@ -368,7 +374,8 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-lg font-semibold text-white">VPN Status</h2>
             <span className="ml-auto text-xs text-nfs-muted">
-              {vpnStatus.filter((v) => v.is_active).length} / {vpnStatus.length} active
+              {vpnStatus.filter((v) => v.is_active).length} / {vpnStatus.length}{" "}
+              active
             </span>
           </div>
           {vpnStatus.length === 0 ? (
@@ -376,10 +383,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {vpnStatus.map((v) => (
-                <InfoBox
-                  key={v.id}
-                  type={v.is_active ? "success" : "warning"}
-                >
+                <InfoBox key={v.id} type={v.is_active ? "success" : "warning"}>
                   <div className="flex items-center gap-2">
                     <div
                       className={`w-2 h-2 rounded-full ${
@@ -401,6 +405,122 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Firewall */}
+        <div
+          onClick={() => navigate("/settings?tab=firewall")}
+          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-orange-500/10">
+              <Lock className="w-4 h-4 text-orange-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Firewall</h2>
+            {firewallStatus &&
+              (firewallStatus.export_protection?.active ||
+                firewallStatus.client_protection?.active) && (
+                <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Active
+                </span>
+              )}
+          </div>
+          {!firewallStatus ? (
+            <InfoBox type="warning">No firewall data available</InfoBox>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">
+                  Protection Status
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const Badge = ({ active, label }) => (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          active
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1 h-1 rounded-full ${active ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        {label}
+                      </span>
+                    );
+                    return (
+                      <>
+                        <Badge
+                          active={firewallStatus.export_protection?.active}
+                          label={`Export ${firewallStatus.export_protection?.active ? "Protected" : "Unprotected"}`}
+                        />
+                        <Badge
+                          active={firewallStatus.client_protection?.active}
+                          label={`Client ${firewallStatus.client_protection?.active ? "Protected" : "Unprotected"}`}
+                        />
+                        <Badge
+                          active={firewallStatus.vpn_only}
+                          label={`VPN-Only ${firewallStatus.vpn_only ? "ON" : "OFF"}`}
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">
+                  Details
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(() => {
+                    const Badge = ({ active, label }) => (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          active
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1 h-1 rounded-full ${active ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        {label}
+                      </span>
+                    );
+                    return (
+                      <>
+                        <Badge
+                          active={
+                            firewallStatus.export_protection?.rules_count > 0
+                          }
+                          label={`${firewallStatus.export_protection?.rules_count || 0} Export Rules`}
+                        />
+                        <Badge
+                          active={
+                            firewallStatus.client_protection?.rules_count > 0
+                          }
+                          label={`${firewallStatus.client_protection?.rules_count || 0} Client Rules`}
+                        />
+                        {firewallStatus.vpn_interfaces?.length > 0 && (
+                          <Badge
+                            active={true}
+                            label={`VPN: ${firewallStatus.vpn_interfaces.join(", ")}`}
+                          />
+                        )}
+                        <Badge
+                          active={true}
+                          label={`Ports: ${firewallStatus.fixed_ports?.mountd}, ${firewallStatus.fixed_ports?.nlockmgr}, ${firewallStatus.fixed_ports?.statd}`}
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Streaming Optimization */}
         <div
           onClick={() => navigate("/settings?tab=system")}
           className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
@@ -422,7 +542,8 @@ export default function DashboardPage() {
 
           {/* Kernel Tuning */}
           {(() => {
-            const getParam = (name) => kernelParams.find((p) => p.name === name)?.value;
+            const getParam = (name) =>
+              kernelParams.find((p) => p.name === name)?.value;
             const congestion = getParam("net.ipv4.tcp_congestion_control");
             const slotTable = getParam("sunrpc.tcp_max_slot_table_entries");
             const rmemMax = getParam("net.core.rmem_max");
@@ -434,8 +555,16 @@ export default function DashboardPage() {
             const isBBR = congestion === "bbr";
             const isHighSlots = slotTable && parseInt(slotTable) >= 128;
             const isHighBuf = rmemMax && parseInt(rmemMax) >= 16777216;
-            const rpsActive = rpsXps && rpsXps.rps_cpus && rpsXps.rps_cpus !== "0" && rpsXps.rps_cpus !== "00";
-            const xpsActive = rpsXps && rpsXps.xps_cpus && rpsXps.xps_cpus !== "0" && rpsXps.xps_cpus !== "00";
+            const rpsActive =
+              rpsXps &&
+              rpsXps.rps_cpus &&
+              rpsXps.rps_cpus !== "0" &&
+              rpsXps.rps_cpus !== "00";
+            const xpsActive =
+              rpsXps &&
+              rpsXps.xps_cpus &&
+              rpsXps.xps_cpus !== "0" &&
+              rpsXps.xps_cpus !== "00";
 
             const Badge = ({ active, label }) => (
               <span
@@ -445,7 +574,9 @@ export default function DashboardPage() {
                     : "bg-red-500/15 text-red-400 border-red-500/30"
                 }`}
               >
-                <span className={`w-1 h-1 rounded-full ${active ? "bg-emerald-400" : "bg-red-400"}`} />
+                <span
+                  className={`w-1 h-1 rounded-full ${active ? "bg-emerald-400" : "bg-red-400"}`}
+                />
                 {label}
               </span>
             );
@@ -453,31 +584,94 @@ export default function DashboardPage() {
             return (
               <div className="space-y-3">
                 {kernelParams.length === 0 ? (
-                  <InfoBox type="warning">No kernel tuning data available</InfoBox>
+                  <InfoBox type="warning">
+                    No kernel tuning data available
+                  </InfoBox>
                 ) : (
                   <>
                     <div>
-                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">Kernel Tuning</p>
+                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">
+                        Kernel Tuning
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge active={isBBR} label={congestion ? `TCP ${congestion.toUpperCase()}` : "TCP Not Set"} />
-                        <Badge active={isHighSlots} label={slotTable ? `NFS Slots ${slotTable}` : "NFS Slots Not Set"} />
-                        <Badge active={isHighBuf} label={rmemMax ? `Buffer ${(parseInt(rmemMax) / 1048576)}MB` : "Buffer Not Set"} />
-                        <Badge active={!!qdisc} label={qdisc ? `QDisc ${qdisc}` : "QDisc Not Set"} />
-                        <Badge active={dirtyRatio && parseInt(dirtyRatio) >= 30} label={dirtyRatio ? `Dirty ${dirtyRatio}%` : "Dirty Not Set"} />
-                        <Badge active={cachePress && parseInt(cachePress) <= 50} label={cachePress ? `Cache Press ${cachePress}` : "Cache Press Not Set"} />
+                        <Badge
+                          active={isBBR}
+                          label={
+                            congestion
+                              ? `TCP ${congestion.toUpperCase()}`
+                              : "TCP Not Set"
+                          }
+                        />
+                        <Badge
+                          active={isHighSlots}
+                          label={
+                            slotTable
+                              ? `NFS Slots ${slotTable}`
+                              : "NFS Slots Not Set"
+                          }
+                        />
+                        <Badge
+                          active={isHighBuf}
+                          label={
+                            rmemMax
+                              ? `Buffer ${parseInt(rmemMax) / 1048576}MB`
+                              : "Buffer Not Set"
+                          }
+                        />
+                        <Badge
+                          active={!!qdisc}
+                          label={qdisc ? `QDisc ${qdisc}` : "QDisc Not Set"}
+                        />
+                        <Badge
+                          active={dirtyRatio && parseInt(dirtyRatio) >= 30}
+                          label={
+                            dirtyRatio
+                              ? `Dirty ${dirtyRatio}%`
+                              : "Dirty Not Set"
+                          }
+                        />
+                        <Badge
+                          active={cachePress && parseInt(cachePress) <= 50}
+                          label={
+                            cachePress
+                              ? `Cache Press ${cachePress}`
+                              : "Cache Press Not Set"
+                          }
+                        />
                       </div>
                     </div>
 
                     <div>
-                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">CPU Load Balancing</p>
+                      <p className="text-[11px] font-medium text-nfs-muted uppercase tracking-wider mb-1.5">
+                        CPU Load Balancing
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge active={rpsActive} label={`RPS ${rpsActive ? "Enabled" : "Disabled"}`} />
-                        <Badge active={xpsActive} label={`XPS ${xpsActive ? "Enabled" : "Disabled"}`} />
+                        <Badge
+                          active={rpsActive}
+                          label={`RPS ${rpsActive ? "Enabled" : "Disabled"}`}
+                        />
+                        <Badge
+                          active={xpsActive}
+                          label={`XPS ${xpsActive ? "Enabled" : "Disabled"}`}
+                        />
                         {rpsXps && (
                           <>
-                            <Badge active={true} label={`${rpsXps.cpu_count} CPUs`} />
-                            <Badge active={!!rpsXps.interface} label={rpsXps.interface || "No Interface"} />
-                            <Badge active={rpsXps.mtu && parseInt(rpsXps.mtu) >= 1500} label={rpsXps.mtu ? `MTU ${rpsXps.mtu}` : "MTU Not Set"} />
+                            <Badge
+                              active={true}
+                              label={`${rpsXps.cpu_count} CPUs`}
+                            />
+                            <Badge
+                              active={!!rpsXps.interface}
+                              label={rpsXps.interface || "No Interface"}
+                            />
+                            <Badge
+                              active={
+                                rpsXps.mtu && parseInt(rpsXps.mtu) >= 1500
+                              }
+                              label={
+                                rpsXps.mtu ? `MTU ${rpsXps.mtu}` : "MTU Not Set"
+                              }
+                            />
                           </>
                         )}
                       </div>
