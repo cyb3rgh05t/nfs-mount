@@ -1,4 +1,5 @@
 import logging
+import socket
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -82,10 +83,11 @@ async def send_discord(
     color = color_map.get(status, 3447003)
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    hostname = socket.gethostname()
 
     fields = [
         {"name": "**Status**", "value": f"`{status}`", "inline": True},
-        {"name": "**Server**", "value": "`NFS-Manager`", "inline": True},
+        {"name": "**Server**", "value": f"`{hostname}`", "inline": True},
     ]
     if details:
         # Add a blank inline field to force a new row
@@ -131,6 +133,7 @@ async def send_telegram(
     }
     emoji = emoji_map.get(status, "\u2139\ufe0f")
     now = datetime.now().strftime("%H:%M:%S | %d.%m.%Y")
+    hostname = socket.gethostname()
 
     detail_lines = ""
     if details:
@@ -143,7 +146,7 @@ async def send_telegram(
         f"<b>{emoji} NFS-MergerFS Manager</b>\n"
         f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
         f"<b>Status:</b> <code>{status}</code>\n"
-        f"<b>Server:</b> <code>NFS-Manager</code>\n\n"
+        f"<b>Server:</b> <code>{hostname}</code>\n\n"
         f"<b>Meldung:</b>\n<i>{message}</i>\n"
         f"{detail_lines}\n"
         f"<code>{now}</code>"

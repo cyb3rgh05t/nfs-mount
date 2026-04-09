@@ -172,6 +172,8 @@ async def apply_export_firewall(db: AsyncSession | None = None) -> dict:
     """
     Rebuild NFS export (server) firewall rules.
     Allows only IPs from enabled exports to reach NFS server ports.
+    If no exports are configured, removes the firewall chain entirely
+    to avoid blocking NFS traffic on a fresh/unconfigured system.
     """
     try:
         close_session = False
@@ -187,6 +189,22 @@ async def apply_export_firewall(db: AsyncSession | None = None) -> dict:
         finally:
             if close_session:
                 await db.close()
+
+        # No exports configured — remove firewall chain to avoid blocking
+        if not exports:
+            logger.info(
+                "No NFS exports configured — skipping export firewall "
+                "(removing chain if present)"
+            )
+            await remove_export_firewall()
+            return {
+                "success": True,
+                "exports_count": 0,
+                "allowed_hosts": [],
+                "vpn_only": False,
+                "vpn_interfaces": [],
+                "skipped": True,
+            }
 
         # Collect unique allowed hosts
         allowed_cidrs = set()
@@ -324,10 +342,37 @@ def _apply_export_rules(
     _add_jump("INPUT", EXPORT_CHAIN)
 
 
+def _get_system_nfs_server_ips() -> set[str]:
+    """
+    Detect NFS server IPs from currently active system mounts (/proc/mounts).
+    This prevents the client firewall from making existing non-DB mounts stale.
+    """
+    ips = set()
+    try:
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 3 and "nfs" in parts[2]:
+                    # device is like "192.168.1.10:/share"
+                    device = parts[0]
+                    if ":" in device:
+                        host = device.split(":")[0]
+                        try:
+                            ipaddress.ip_address(host)
+                            ips.add(host + "/32")
+                        except ValueError:
+                            pass
+    except Exception:
+        pass
+    return ips
+
+
 async def apply_client_firewall(db: AsyncSession | None = None) -> dict:
     """
     Rebuild NFS client firewall rules.
     Restricts outbound NFS traffic to only configured server IPs.
+    Also includes IPs from existing system NFS mounts to avoid making them stale.
+    If no DB mounts and no system mounts exist, removes the chain entirely.
     """
     try:
         close_session = False
@@ -344,7 +389,7 @@ async def apply_client_firewall(db: AsyncSession | None = None) -> dict:
             if close_session:
                 await db.close()
 
-        # Collect unique server IPs
+        # Collect unique server IPs from DB
         server_ips = set()
         for m in mounts:
             ip = m.server_ip.strip()
@@ -354,6 +399,29 @@ async def apply_client_firewall(db: AsyncSession | None = None) -> dict:
             except ValueError:
                 logger.warning(f"Skipping invalid server IP: {ip}")
 
+        # Also include IPs from existing system NFS mounts
+        system_ips = _get_system_nfs_server_ips()
+        if system_ips:
+            logger.info(
+                f"Detected {len(system_ips)} existing system NFS mount(s), "
+                f"adding to allowed servers: {sorted(system_ips)}"
+            )
+            server_ips.update(system_ips)
+
+        # No mounts at all — remove firewall chain to avoid blocking
+        if not mounts and not system_ips:
+            logger.info(
+                "No NFS mounts configured or active — skipping client firewall "
+                "(removing chain if present)"
+            )
+            await remove_client_firewall()
+            return {
+                "success": True,
+                "mounts_count": 0,
+                "allowed_servers": [],
+                "skipped": True,
+            }
+
         # Always allow loopback
         server_ips.add("127.0.0.0/8")
 
@@ -361,7 +429,8 @@ async def apply_client_firewall(db: AsyncSession | None = None) -> dict:
         await loop.run_in_executor(None, lambda: _apply_client_rules(server_ips))
 
         logger.info(
-            f"Client firewall applied: {len(mounts)} mounts, "
+            f"Client firewall applied: {len(mounts)} DB mounts + "
+            f"{len(system_ips)} system mounts, "
             f"{len(server_ips)} allowed servers"
         )
         return {
