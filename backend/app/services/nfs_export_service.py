@@ -73,17 +73,23 @@ async def write_exports_file(db: AsyncSession = None) -> dict:
 
     Uses a fresh DB session to guarantee reading committed state.
     """
+    # Read enabled exports from a fresh session to avoid stale cache
     async with async_session() as fresh_db:
         result = await fresh_db.execute(
             select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
         )
         exports = result.scalars().all()
         logger.info(f"write_exports_file: found {len(exports)} enabled exports")
+
+        # Extract data while session is open (ORM objects expire after close)
+        export_lines = []
         for exp in exports:
+            line = _build_export_line(exp)
             logger.info(
                 f"write_exports_file: export id={exp.id} name={exp.name} "
-                f"enabled={exp.enabled} path={exp.export_path}"
+                f"enabled={exp.enabled} line={line}"
             )
+            export_lines.append(line)
 
     exports_path = _get_exports_path()
     logger.info(f"write_exports_file: using exports path {exports_path}")
@@ -115,8 +121,7 @@ async def write_exports_file(db: AsyncSession = None) -> dict:
 
     # Build managed block
     managed = [MANAGED_BEGIN + "\n"]
-    for exp in exports:
-        line = _build_export_line(exp)
+    for line in export_lines:
         logger.info(f"write_exports_file: adding export line: {line}")
         managed.append(line + "\n")
     managed.append(MANAGED_END + "\n")
