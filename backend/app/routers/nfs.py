@@ -203,6 +203,7 @@ async def list_exports(db: AsyncSession = Depends(get_db)):
 @router.post("/exports", response_model=NFSExportResponse, status_code=201)
 async def create_export(data: NFSExportCreate, db: AsyncSession = Depends(get_db)):
     export = NFSExport(**data.model_dump())
+    export.is_active = False  # Not active until explicitly enabled
     db.add(export)
     await db.commit()
     await db.refresh(export)
@@ -313,7 +314,12 @@ async def get_all_export_statuses(db: AsyncSession = Depends(get_db)):
     active_lines = await nfs_export_service.get_active_exports()
     statuses = []
     for exp in exports:
-        is_active = any(exp.export_path in line for line in active_lines)
+        # Match both path AND host to avoid false positives from system exports
+        # with the same path but different hosts
+        is_active = any(
+            exp.export_path in line and exp.allowed_hosts in line
+            for line in active_lines
+        )
         statuses.append(
             {
                 "id": exp.id,
