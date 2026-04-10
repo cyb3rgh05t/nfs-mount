@@ -29,7 +29,11 @@ from .services.vpn_service import auto_connect_vpn
 from .services.notification_service import send_alert
 from .services.system_service import auto_apply_saved_settings
 from .services.firewall_service import apply_all_firewall_rules
-from .services.nfs_export_service import start_nfs_server, write_exports_file
+from .services.nfs_export_service import (
+    start_nfs_server,
+    write_exports_file,
+    _build_export_line,
+)
 from .models.user import User
 from .models.nfs_export import NFSExport
 from .auth import hash_password
@@ -149,7 +153,9 @@ async def lifespan(app: FastAPI):
                 logger.info(
                     f"Found {len(enabled_exports)} auto-enable NFS export(s), starting NFS server..."
                 )
-                await write_exports_file(db)
+                # Build lines directly from ORM objects (avoids fresh-session re-query issues)
+                lines = [_build_export_line(exp) for exp in enabled_exports]
+                await write_exports_file(db, extra_lines=lines)
                 srv_result = await start_nfs_server()
                 if srv_result["success"]:
                     for exp in enabled_exports:
