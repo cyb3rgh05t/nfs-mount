@@ -59,7 +59,3 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             logger.info(msg)
 
         return response
-        else:
-            logger.info(msg)
-
-        return response
