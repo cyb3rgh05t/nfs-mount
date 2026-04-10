@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sqlite3
 import subprocess
 
 from sqlalchemy import select
@@ -68,28 +69,62 @@ def _build_export_line(export: NFSExport) -> str:
     return f"{export.export_path} {export.allowed_hosts}({export.options})"
 
 
-async def write_exports_file(db: AsyncSession = None) -> dict:
+async def write_exports_file(
+    db: AsyncSession = None, extra_lines: list[str] = None
+) -> dict:
     """Regenerate the managed section in /etc/exports from all enabled exports.
 
     Uses a fresh DB session to guarantee reading committed state.
+    extra_lines: additional export lines to include (bypass DB query).
     """
-    # Read enabled exports from a fresh session to avoid stale cache
-    async with async_session() as fresh_db:
-        result = await fresh_db.execute(
-            select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
-        )
-        exports = result.scalars().all()
-        logger.info(f"write_exports_file: found {len(exports)} enabled exports")
+    export_lines = list(extra_lines or [])
 
-        # Extract data while session is open (ORM objects expire after close)
-        export_lines = []
-        for exp in exports:
-            line = _build_export_line(exp)
-            logger.info(
-                f"write_exports_file: export id={exp.id} name={exp.name} "
-                f"enabled={exp.enabled} line={line}"
+    # Read enabled exports from a fresh session
+    try:
+        async with async_session() as fresh_db:
+            result = await fresh_db.execute(
+                select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
             )
-            export_lines.append(line)
+            exports = result.scalars().all()
+            logger.info(
+                f"write_exports_file: DB query found {len(exports)} enabled exports"
+            )
+            for exp in exports:
+                line = _build_export_line(exp)
+                logger.info(
+                    f"write_exports_file: from DB: id={exp.id} name={exp.name} line={line}"
+                )
+                if line not in export_lines:
+                    export_lines.append(line)
+    except Exception as e:
+        logger.error(f"write_exports_file: DB query failed: {e}")
+
+    # Fallback: direct sqlite3 read if async session returned nothing
+    if not export_lines:
+        logger.warning(
+            "write_exports_file: no export lines yet, trying direct sqlite3 read"
+        )
+        try:
+            db_path = settings.database_url.replace("sqlite+aiosqlite:///", "")
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT id, name, export_path, allowed_hosts, options, enabled FROM nfs_exports WHERE enabled = 1"
+            ).fetchall()
+            logger.info(
+                f"write_exports_file: direct sqlite3 found {len(rows)} enabled exports"
+            )
+            for row in rows:
+                line = f"{row['export_path']} {row['allowed_hosts']}({row['options']})"
+                logger.info(
+                    f"write_exports_file: sqlite3 row: id={row['id']} name={row['name']} line={line}"
+                )
+                export_lines.append(line)
+            conn.close()
+        except Exception as e2:
+            logger.error(f"write_exports_file: direct sqlite3 fallback failed: {e2}")
+
+    logger.info(f"write_exports_file: total {len(export_lines)} export lines to write")
 
     exports_path = _get_exports_path()
     logger.info(f"write_exports_file: using exports path {exports_path}")
@@ -382,7 +417,10 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
     await db.refresh(export)
     logger.info(f"enable_export: committed enabled=True for '{export.name}'")
 
-    write_result = await write_exports_file(db)
+    # Build the line for THIS export and pass it directly (bypass DB re-query issues)
+    this_line = _build_export_line(export)
+    logger.info(f"enable_export: built line: {this_line}")
+    write_result = await write_exports_file(db, extra_lines=[this_line])
     logger.info(f"enable_export: write_exports_file result={write_result}")
     if not write_result["success"]:
         return write_result
@@ -440,7 +478,15 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
 async def apply_all_exports() -> dict:
     """Write exports file from DB, start NFS server, and update firewall."""
     async with async_session() as session:
-        write_result = await write_exports_file(session)
+        # Build export lines from session directly (don't rely on write_exports_file re-query)
+        result = await session.execute(
+            select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
+        )
+        enabled_exports = result.scalars().all()
+        lines = [_build_export_line(exp) for exp in enabled_exports]
+        logger.info(f"apply_all_exports: found {len(lines)} enabled exports in session")
+
+        write_result = await write_exports_file(session, extra_lines=lines)
         if not write_result["success"]:
             return write_result
         # Ensure NFS server daemons are running (also calls exportfs -ra internally)
