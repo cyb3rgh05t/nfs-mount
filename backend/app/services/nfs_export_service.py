@@ -243,7 +243,13 @@ async def start_nfs_server() -> dict:
 
 
 async def get_active_exports() -> list[str]:
-    """Get list of currently active NFS exports via exportfs -v."""
+    """Get list of currently active NFS exports via exportfs -v.
+
+    Returns lines in ``path host(options)`` format.  The raw output of
+    ``exportfs -v`` splits path and host across two lines, so we join
+    continuation lines (those starting with whitespace) back onto the
+    preceding path line.
+    """
     try:
         cmd = _exportfs_cmd(["-v"])
         result = await _run(cmd)
@@ -252,7 +258,17 @@ async def get_active_exports() -> list[str]:
         return []
     if result.returncode != 0:
         return []
-    return [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+    # Join continuation lines: "  \t144.76.87.20(…)" belongs to the preceding path
+    merged: list[str] = []
+    for raw_line in result.stdout.split("\n"):
+        if not raw_line.strip():
+            continue
+        if raw_line[0] in (" ", "\t") and merged:
+            # continuation – append host part to previous path line
+            merged[-1] = merged[-1] + " " + raw_line.strip()
+        else:
+            merged.append(raw_line.strip())
+    return merged
 
 
 def _parse_exports_lines(lines, source: str = "system") -> list[dict]:

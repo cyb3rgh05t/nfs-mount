@@ -171,6 +171,8 @@ async def lifespan(app: FastAPI):
     # Start background health-check for mounts
     start_health_check()
 
+    logger.info("Application startup complete — ready to serve requests")
+
     yield
 
     # ── Shutdown ──
