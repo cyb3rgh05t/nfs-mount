@@ -66,8 +66,7 @@ if [ -n "$ETH_DEV" ]; then
     for tx in /sys/class/net/$ETH_DEV/queues/tx-*/xps_cpus; do
         [ -f "$tx" ] && echo "$MASK" > "$tx" 2>/dev/null || true
     done
-    # Set MTU
-    ip link set dev $ETH_DEV mtu 1500 2>/dev/null || true
+    # Note: MTU is NOT changed — preserve host network configuration
     echo "[TUNING] CPU load balancing applied for $ETH_DEV (mask=$MASK)."
 else
     echo "[TUNING] No primary network interface found - skipping RPS/XPS."

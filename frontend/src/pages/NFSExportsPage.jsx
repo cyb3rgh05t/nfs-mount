@@ -21,7 +21,8 @@ import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 
-const DEFAULT_EXPORT_OPTIONS = "rw,sync,no_subtree_check,no_root_squash";
+const DEFAULT_EXPORT_OPTIONS =
+  "rw,async,no_subtree_check,all_squash,anonuid=1000,anongid=1000";
 
 function Modal({ title, onClose, children }) {
   return (
