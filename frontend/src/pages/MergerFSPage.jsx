@@ -258,8 +258,15 @@ export default function MergerFSPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              await fetchData();
+              setProgress({ message: "Refreshing MergerFS configs...", status: "loading" });
+              try {
+                await fetchData();
+                setProgress({ message: "MergerFS configs refreshed", status: "success" });
+              } catch (e) {
+                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+              }
               setRefreshing(false);
+              setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
@@ -335,9 +342,18 @@ export default function MergerFSPage() {
                         />
                         {mounted ? "Mounted" : "Unmounted"}
                       </span>
-                      {c.auto_mount && (
+                      {c.auto_mount ? (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-purple-500/15 text-purple-400 border-purple-500/30">
-                          Auto
+                          Auto-Mount
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
+                          No Auto-Mount
+                        </span>
+                      )}
+                      {!c.enabled && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
+                          Disabled
                         </span>
                       )}
                     </div>

@@ -55,6 +55,7 @@ import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
+import ProgressDialog from "../components/ProgressDialog";
 
 const inputClass =
   "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
@@ -155,6 +156,7 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState(null);
   const [firewallStatus, setFirewallStatus] = useCachedState(
     "settings-firewall",
     null,
@@ -611,8 +613,15 @@ export default function SettingsPage() {
         <button
           onClick={async () => {
             setRefreshing(true);
-            await fetchData();
+            setProgress({ message: "Refreshing settings...", status: "loading" });
+            try {
+              await fetchData();
+              setProgress({ message: "Settings refreshed", status: "success" });
+            } catch (e) {
+              setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+            }
             setRefreshing(false);
+            setTimeout(() => setProgress(null), 1500);
           }}
           className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
         >
@@ -2781,6 +2790,7 @@ devices:
           </div>
         </>
       )}
+      <ProgressDialog progress={progress} />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
+import ProgressDialog from "../components/ProgressDialog";
 
 function StatCard({ icon: Icon, label, value, sub, color = "nfs-primary" }) {
   const colorMap = {
@@ -77,6 +78,7 @@ export default function DashboardPage() {
   );
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -154,8 +156,15 @@ export default function DashboardPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              await fetchData();
+              setProgress({ message: "Refreshing dashboard...", status: "loading" });
+              try {
+                await fetchData();
+                setProgress({ message: "Dashboard refreshed", status: "success" });
+              } catch (e) {
+                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+              }
               setRefreshing(false);
+              setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
@@ -771,6 +780,7 @@ export default function DashboardPage() {
           })()}
         </div>
       </div>
+      <ProgressDialog progress={progress} />
     </div>
   );
 }

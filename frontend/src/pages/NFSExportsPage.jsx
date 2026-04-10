@@ -307,8 +307,15 @@ export default function NFSExportsPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              await fetchData();
+              setProgress({ message: "Refreshing NFS exports...", status: "loading" });
+              try {
+                await fetchData();
+                setProgress({ message: "NFS exports refreshed", status: "success" });
+              } catch (e) {
+                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+              }
               setRefreshing(false);
+              setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
@@ -387,6 +394,15 @@ export default function NFSExportsPage() {
                       {!exp.enabled && (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
                           Disabled
+                        </span>
+                      )}
+                      {exp.auto_enable ? (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                          Auto-Enable
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-slate-500/15 text-slate-400 border-slate-500/30">
+                          No Auto-Enable
                         </span>
                       )}
                     </div>
