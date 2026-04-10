@@ -34,6 +34,7 @@ from .services.nfs_export_service import (
     write_exports_file,
     _build_export_line,
 )
+from .services.health_check_service import start_health_check, stop_health_check
 from .models.user import User
 from .models.nfs_export import NFSExport
 from .auth import hash_password
@@ -167,9 +168,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Auto-start NFS exports failed: {e}")
 
+    # Start background health-check for mounts
+    start_health_check()
+
     yield
 
-    # ── Shutdown: send notification ──
+    # ── Shutdown ──
+    stop_health_check()
     logger.info("Container shutting down...")
     try:
         await send_alert(

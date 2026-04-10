@@ -208,6 +208,15 @@ async def create_export(data: NFSExportCreate, db: AsyncSession = Depends(get_db
     await db.commit()
     await db.refresh(export)
     logger.info("NFS export created: %s (%s)", export.name, export.export_path)
+    await send_alert(
+        "INFO",
+        f"NFS Export **{export.name}** created",
+        {
+            "Export Path": export.export_path,
+            "Allowed Hosts": export.allowed_hosts,
+            "Options": export.options,
+        },
+    )
     return export
 
 
@@ -249,7 +258,15 @@ async def delete_export(export_id: int, db: AsyncSession = Depends(get_db)):
     await nfs_export_service.apply_exports()
     # Update firewall rules
     await firewall_service.apply_export_firewall(db)
-    logger.info("NFS export deleted: id=%d", export_id)
+    logger.info("NFS export deleted: %s (id=%d)", export.name, export_id)
+    await send_alert(
+        "WARNING",
+        f"NFS Export **{export.name}** deleted",
+        {
+            "Export Path": export.export_path,
+            "Allowed Hosts": export.allowed_hosts,
+        },
+    )
     return {"detail": "Deleted"}
 
 
@@ -325,6 +342,8 @@ async def get_all_export_statuses(db: AsyncSession = Depends(get_db)):
                 "id": exp.id,
                 "name": exp.name,
                 "export_path": exp.export_path,
+                "allowed_hosts": exp.allowed_hosts,
+                "nfs_version": exp.nfs_version,
                 "is_active": is_active,
             }
         )

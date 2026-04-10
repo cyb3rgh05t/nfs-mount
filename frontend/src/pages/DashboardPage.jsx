@@ -9,7 +9,6 @@ import {
   Network,
   Shield,
   GitMerge,
-  Server,
   RefreshCw,
   Plus,
   Download,
@@ -237,21 +236,13 @@ export default function DashboardPage() {
               {nfsStatus.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
+                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white">{m.name}</p>
-                    <p className="text-xs text-nfs-muted">{m.local_path}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1.5">
-                      <Server className="w-3.5 h-3.5 text-nfs-muted" />
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          m.server_reachable ? "bg-emerald-400" : "bg-red-400"
-                        }`}
-                      />
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{m.name}</p>
+                      <p className="text-xs text-nfs-muted">{m.local_path}</p>
+                    </div>
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
                         m.mounted
@@ -263,6 +254,32 @@ export default function DashboardPage() {
                         className={`w-1.5 h-1.5 rounded-full ${m.mounted ? "bg-emerald-400" : "bg-red-400"}`}
                       />
                       {m.mounted ? "Mounted" : "Unmounted"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        m.server_reachable
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/15 text-red-400 border-red-500/30"
+                      }`}
+                    >
+                      <span
+                        className={`w-1 h-1 rounded-full ${m.server_reachable ? "bg-emerald-400" : "bg-red-400"}`}
+                      />
+                      Server {m.server_reachable ? "Online" : "Offline"}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        m.validated
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      }`}
+                    >
+                      <span
+                        className={`w-1 h-1 rounded-full ${m.validated ? "bg-emerald-400" : "bg-amber-400"}`}
+                      />
+                      {m.validated ? "Validated" : "Not Validated"}
                     </span>
                   </div>
                 </div>
@@ -292,24 +309,61 @@ export default function DashboardPage() {
               {mergerStatus.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
+                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white">{c.name}</p>
-                    <p className="text-xs text-nfs-muted">{c.mount_point}</p>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
-                      c.mounted
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        : "bg-red-500/15 text-red-400 border-red-500/30"
-                    }`}
-                  >
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{c.name}</p>
+                      <p className="text-xs text-nfs-muted">{c.mount_point}</p>
+                    </div>
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
-                    />
-                    {c.mounted ? "Mounted" : "Unmounted"}
-                  </span>
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                        c.mounted
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/15 text-red-400 border-red-500/30"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
+                      />
+                      {c.mounted ? "Mounted" : "Unmounted"}
+                    </span>
+                  </div>
+                  {c.mounted && c.used_percent != null && (
+                    <div className="space-y-1.5">
+                      <div className="w-full bg-nfs-dark/50 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            c.used_percent > 90
+                              ? "bg-red-400"
+                              : c.used_percent > 70
+                                ? "bg-amber-400"
+                                : "bg-emerald-400"
+                          }`}
+                          style={{ width: `${Math.min(c.used_percent, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                          {c.used_space} / {c.total_space}
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                          {c.free_space} free
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            c.used_percent > 90
+                              ? "bg-red-500/15 text-red-400 border-red-500/30"
+                              : c.used_percent > 70
+                                ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          }`}
+                        >
+                          {c.used_percent}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -337,24 +391,34 @@ export default function DashboardPage() {
               {nfsExports.map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-3"
+                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-white">{e.name}</p>
-                    <p className="text-xs text-nfs-muted">{e.export_path}</p>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
-                      e.is_active
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        : "bg-red-500/15 text-red-400 border-red-500/30"
-                    }`}
-                  >
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-medium text-white">{e.name}</p>
+                      <p className="text-xs text-nfs-muted">{e.export_path}</p>
+                    </div>
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${e.is_active ? "bg-emerald-400" : "bg-red-400"}`}
-                    />
-                    {e.is_active ? "Exported" : "Inactive"}
-                  </span>
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                        e.is_active
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/15 text-red-400 border-red-500/30"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${e.is_active ? "bg-emerald-400" : "bg-red-400"}`}
+                      />
+                      {e.is_active ? "Exported" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                      NFS v{e.nfs_version || "4.2"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                      {e.allowed_hosts || "*"}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

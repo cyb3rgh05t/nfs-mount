@@ -93,4 +93,6 @@ class NFSExportStatus(BaseModel):
     id: int
     name: str
     export_path: str
+    allowed_hosts: str = "*"
+    nfs_version: str = "4.2"
     is_active: bool

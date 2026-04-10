@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     telegram_token: str = ""
     telegram_chat_id: str = ""
     telegram_topic_id: str = ""
-    log_file: str = "/var/log/nfs-manager/nfs-manager.log"
+    log_file: str = "/data/logs/nfs-manager.log"
 
     # Server identification for notifications
     server_name: str = ""

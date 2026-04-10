@@ -186,8 +186,14 @@ async def update_user(
     if data.password is not None:
         user.hashed_password = hash_password(data.password)
     if data.is_active is not None:
+        if not data.is_active and user_id == admin.id:
+            raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
         user.is_active = data.is_active
     if data.is_admin is not None:
+        if not data.is_admin and user_id == admin.id:
+            raise HTTPException(
+                status_code=400, detail="Cannot remove your own admin privileges"
+            )
         user.is_admin = data.is_admin
 
     await db.commit()
