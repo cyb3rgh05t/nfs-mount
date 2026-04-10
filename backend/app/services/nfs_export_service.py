@@ -361,11 +361,12 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
     logger.info(
         f"enable_export: enabling '{export.name}' path={export.export_path} hosts={export.allowed_hosts}"
     )
-    # Mark as enabled first so write_exports_file includes it
+    # Commit enabled=True so write_exports_file query sees it
     export.enabled = True
-    export.is_active = False  # will be set True after NFS server starts
-    await db.flush()
-    logger.info(f"enable_export: flushed enabled=True for '{export.name}'")
+    export.is_active = False
+    await db.commit()
+    await db.refresh(export)
+    logger.info(f"enable_export: committed enabled=True for '{export.name}'")
 
     write_result = await write_exports_file(db)
     logger.info(f"enable_export: write_exports_file result={write_result}")
@@ -379,6 +380,7 @@ async def enable_export(export: NFSExport, db: AsyncSession) -> dict:
         return server_result
     export.is_active = True
     await db.commit()
+    await db.refresh(export)
     logger.info(f"enable_export: committed is_active=True for '{export.name}'")
     # Update firewall rules to allow the new host
     await firewall_service.apply_export_firewall(db)
@@ -390,10 +392,12 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     logger.info(
         f"disable_export: disabling '{export.name}' path={export.export_path} hosts={export.allowed_hosts}"
     )
-    # 1) Mark as disabled in DB first
+    # 1) Commit disabled state so write_exports_file query sees it
     export.enabled = False
     export.is_active = False
-    await db.flush()
+    await db.commit()
+    await db.refresh(export)
+    logger.info(f"disable_export: committed disabled state for '{export.name}'")
 
     # 2) Re-write exports file (removes this export from managed block)
     write_result = await write_exports_file(db)
@@ -411,11 +415,7 @@ async def disable_export(export: NFSExport, db: AsyncSession) -> dict:
     # 4) Reload all exports from file (so host manual exports stay active)
     await apply_exports()
 
-    # 5) Commit DB changes
-    await db.commit()
-    logger.info(f"disable_export: committed disabled state for '{export.name}'")
-
-    # 6) Update firewall rules
+    # 5) Update firewall rules
     await firewall_service.apply_export_firewall(db)
 
     if not write_result["success"]:
