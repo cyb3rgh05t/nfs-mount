@@ -226,13 +226,12 @@ def count_active_mounts(mount_type: str = "nfs") -> int:
         with open("/proc/mounts", "r") as f:
             for line in f:
                 parts = line.split()
-                if mount_type == "nfs" and (
-                    "nfs" in parts[2] if len(parts) > 2 else False
-                ):
+                if len(parts) < 3:
+                    continue
+                fs_type = parts[2]
+                if mount_type == "nfs" and fs_type in ("nfs", "nfs4"):
                     count += 1
-                elif mount_type == "mergerfs" and (
-                    "fuse.mergerfs" in parts[2] if len(parts) > 2 else False
-                ):
+                elif mount_type == "mergerfs" and fs_type == "fuse.mergerfs":
                     count += 1
     except Exception:
         pass
