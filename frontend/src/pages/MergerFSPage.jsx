@@ -9,6 +9,7 @@ import {
   X,
   RefreshCw,
   Save,
+  Loader2,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -16,6 +17,7 @@ import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
+import ProgressDialog from "../components/ProgressDialog";
 
 const DEFAULT_OPTIONS =
   "rw,async_read=true,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=auto-full,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,minfreespace=10G,fsname=mergerfs";
@@ -59,6 +61,7 @@ export default function MergerFSPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
+  const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
@@ -116,6 +119,9 @@ export default function MergerFSPage() {
   };
 
   const handleSave = async () => {
+    const action = editing ? "Updating" : "Creating";
+    setLoading("save");
+    setProgress({ message: `${action} "${form.name}"...`, status: "loading" });
     try {
       const data = {
         ...form,
@@ -126,16 +132,28 @@ export default function MergerFSPage() {
       };
       if (editing) {
         await api.updateMergerFS(editing.id, data);
-        toast.success(`MergerFS config "${form.name}" updated`);
+        setProgress({
+          message: `"${form.name}" updated successfully`,
+          status: "success",
+        });
       } else {
         await api.createMergerFS(data);
-        toast.success(`MergerFS config "${form.name}" created`);
+        setProgress({
+          message: `"${form.name}" created successfully`,
+          status: "success",
+        });
       }
       setShowForm(false);
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: `${action} failed`,
+        status: "error",
+        detail: e.message,
+      });
     }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleDelete = async (id) => {
@@ -147,30 +165,51 @@ export default function MergerFSPage() {
       confirmText: "Delete",
     });
     if (!ok) return;
+    setLoading(`delete-${id}`);
+    setProgress({ message: `Deleting "${cfg?.name}"...`, status: "loading" });
     try {
       await api.deleteMergerFS(id);
-      toast.success(`MergerFS config "${cfg?.name}" deleted`);
+      setProgress({ message: `"${cfg?.name}" deleted`, status: "success" });
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Delete failed",
+        status: "error",
+        detail: e.message,
+      });
     }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleMount = async (id) => {
     const cfg = configs.find((c) => c.id === id);
     setLoading(`mount-${id}`);
+    setProgress({ message: `Mounting "${cfg?.name}"...`, status: "loading" });
     try {
       const result = await api.mountMergerFS(id);
       if (result.success) {
-        toast.success(`MergerFS "${cfg?.name}" mounted successfully`);
+        setProgress({
+          message: `"${cfg?.name}" mounted successfully`,
+          status: "success",
+        });
       } else {
-        toast.error(`Mount failed: ${result.error || "Unknown error"}`);
+        setProgress({
+          message: "Mount failed",
+          status: "error",
+          detail: result.error || "Unknown error",
+        });
       }
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Mount failed",
+        status: "error",
+        detail: e.message,
+      });
     }
     setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleUnmount = async (id) => {
@@ -183,14 +222,20 @@ export default function MergerFSPage() {
     });
     if (!ok) return;
     setLoading(`unmount-${id}`);
+    setProgress({ message: `Unmounting "${cfg?.name}"...`, status: "loading" });
     try {
       await api.unmountMergerFS(id);
-      toast.success(`MergerFS "${cfg?.name}" unmounted`);
+      setProgress({ message: `"${cfg?.name}" unmounted`, status: "success" });
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Unmount failed",
+        status: "error",
+        detail: e.message,
+      });
     }
     setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   return (
@@ -306,7 +351,11 @@ export default function MergerFSPage() {
                         className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Unmount"
                       >
-                        <Square className="w-4 h-4" />
+                        {loading === `unmount-${c.id}` ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
                       </button>
                     ) : (
                       <button
@@ -315,7 +364,11 @@ export default function MergerFSPage() {
                         className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Mount"
                       >
-                        <Play className="w-4 h-4" />
+                        {loading === `mount-${c.id}` ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
                       </button>
                     )}
                     <button
@@ -326,9 +379,15 @@ export default function MergerFSPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(c.id)}
-                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
+                      disabled={loading === `delete-${c.id}`}
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90 disabled:opacity-50"
+                      title="Delete"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {loading === `delete-${c.id}` ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -457,14 +516,14 @@ export default function MergerFSPage() {
           </Field>
           <div className="flex gap-4 mb-4">
             <Toggle
-              checked={form.auto_mount}
-              onChange={(val) => setForm({ ...form, auto_mount: val })}
-              label="Auto-Mount"
-            />
-            <Toggle
               checked={form.enabled}
               onChange={(val) => setForm({ ...form, enabled: val })}
               label="Enabled"
+            />
+            <Toggle
+              checked={form.auto_mount}
+              onChange={(val) => setForm({ ...form, auto_mount: val })}
+              label="Auto-Mount"
             />
           </div>
           <div className="flex justify-end gap-3">
@@ -476,9 +535,12 @@ export default function MergerFSPage() {
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+              disabled={loading === "save"}
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
             >
-              {editing ? (
+              {loading === "save" ? (
+                <Loader2 className="w-4 h-4 text-nfs-primary animate-spin" />
+              ) : editing ? (
                 <Save className="w-4 h-4 text-nfs-primary" />
               ) : (
                 <Plus className="w-4 h-4 text-nfs-primary" />
@@ -488,6 +550,7 @@ export default function MergerFSPage() {
           </div>
         </Modal>
       )}
+      <ProgressDialog progress={progress} />
     </div>
   );
 }

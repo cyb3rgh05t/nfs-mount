@@ -138,6 +138,13 @@ export default function DashboardPage() {
             MergerFS
           </button>
           <button
+            onClick={() => navigate("/nfs/exports")}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+          >
+            <Upload className="w-4 h-4 text-nfs-primary" />
+            NFS Exports
+          </button>
+          <button
             onClick={() => navigate("/vpn")}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
@@ -281,6 +288,11 @@ export default function DashboardPage() {
                       />
                       {m.validated ? "Validated" : "Not Validated"}
                     </span>
+                    {m.auto_mount && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
+                        Auto-Mount
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -329,6 +341,13 @@ export default function DashboardPage() {
                       {c.mounted ? "Mounted" : "Unmounted"}
                     </span>
                   </div>
+                  {c.auto_mount && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                        Auto-Mount
+                      </span>
+                    </div>
+                  )}
                   {c.mounted && c.used_percent != null && (
                     <div className="space-y-1.5">
                       <div className="w-full bg-nfs-dark/50 rounded-full h-1.5 overflow-hidden">
@@ -418,6 +437,11 @@ export default function DashboardPage() {
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
                       {e.allowed_hosts || "*"}
                     </span>
+                    {e.auto_enable && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                        Auto-Enable
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}

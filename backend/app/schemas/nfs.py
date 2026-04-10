@@ -50,6 +50,7 @@ class NFSMountStatus(BaseModel):
     mounted: bool
     validated: bool
     server_reachable: bool
+    auto_mount: bool = False
 
 
 # --- NFS Export (Server) Schemas ---
@@ -96,3 +97,4 @@ class NFSExportStatus(BaseModel):
     allowed_hosts: str = "*"
     nfs_version: str = "4.2"
     is_active: bool
+    auto_enable: bool = False

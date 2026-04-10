@@ -111,6 +111,7 @@ async def get_mount_status(config: MergerFSConfig) -> dict:
         "name": config.name,
         "mount_point": config.mount_point,
         "mounted": mounted,
+        "auto_mount": config.auto_mount,
         "total_space": None,
         "used_space": None,
         "free_space": None,

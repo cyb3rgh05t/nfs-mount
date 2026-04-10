@@ -277,21 +277,23 @@ export default function UsersPage() {
               )}
 
               {/* Toggle Active */}
-              <button
-                onClick={() => handleToggleActive(u)}
-                className={`p-2 rounded-lg transition-colors ${
-                  u.is_active
-                    ? "text-emerald-400 hover:bg-emerald-500/10"
-                    : "text-red-400 hover:bg-red-500/10"
-                }`}
-                title={u.is_active ? "Deactivate" : "Activate"}
-              >
-                {u.is_active ? (
-                  <Shield className="w-4 h-4" />
-                ) : (
-                  <ShieldOff className="w-4 h-4" />
-                )}
-              </button>
+              {u.id !== currentUser?.id && (
+                <button
+                  onClick={() => handleToggleActive(u)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    u.is_active
+                      ? "text-emerald-400 hover:bg-emerald-500/10"
+                      : "text-red-400 hover:bg-red-500/10"
+                  }`}
+                  title={u.is_active ? "Deactivate" : "Activate"}
+                >
+                  {u.is_active ? (
+                    <Shield className="w-4 h-4" />
+                  ) : (
+                    <ShieldOff className="w-4 h-4" />
+                  )}
+                </button>
+              )}
 
               {/* Edit */}
               <button

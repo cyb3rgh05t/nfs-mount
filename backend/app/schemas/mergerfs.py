@@ -45,6 +45,7 @@ class MergerFSStatus(BaseModel):
     name: str
     mount_point: str
     mounted: bool
+    auto_mount: bool = False
     total_space: str | None = None
     used_space: str | None = None
     free_space: str | None = None

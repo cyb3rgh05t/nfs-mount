@@ -116,6 +116,7 @@ async def get_mount_status(mount: NFSMount) -> dict:
         "mounted": is_mounted(mount.local_path),
         "validated": validate_nfs(mount),
         "server_reachable": is_server_reachable(mount.server_ip),
+        "auto_mount": mount.auto_mount,
     }
 
 

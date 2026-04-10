@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Save,
   FileText,
+  Loader2,
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
@@ -20,6 +21,7 @@ import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
+import ProgressDialog from "../components/ProgressDialog";
 
 const DEFAULT_EXPORT_OPTIONS =
   "rw,async,no_subtree_check,all_squash,anonuid=1000,anongid=1000";
@@ -67,6 +69,7 @@ export default function NFSExportsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
+  const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
@@ -125,19 +128,34 @@ export default function NFSExportsPage() {
   };
 
   const handleSave = async () => {
+    const action = editing ? "Updating" : "Creating";
+    setLoading("save");
+    setProgress({ message: `${action} "${form.name}"...`, status: "loading" });
     try {
       if (editing) {
         await api.updateNFSExport(editing.id, form);
-        toast.success(`NFS export "${form.name}" updated`);
+        setProgress({
+          message: `"${form.name}" updated successfully`,
+          status: "success",
+        });
       } else {
         await api.createNFSExport(form);
-        toast.success(`NFS export "${form.name}" created`);
+        setProgress({
+          message: `"${form.name}" created successfully`,
+          status: "success",
+        });
       }
       setShowForm(false);
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: `${action} failed`,
+        status: "error",
+        detail: e.message,
+      });
     }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleDelete = async (id) => {
@@ -149,47 +167,75 @@ export default function NFSExportsPage() {
       confirmText: "Delete",
     });
     if (!ok) return;
+    setLoading(`delete-${id}`);
+    setProgress({ message: `Deleting "${exp?.name}"...`, status: "loading" });
     try {
       await api.deleteNFSExport(id);
-      toast.success(`NFS export "${exp?.name}" deleted`);
+      setProgress({ message: `"${exp?.name}" deleted`, status: "success" });
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Delete failed",
+        status: "error",
+        detail: e.message,
+      });
     }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleEnable = async (id) => {
     const exp = exports.find((e) => e.id === id);
     setLoading(`enable-${id}`);
+    setProgress({ message: `Enabling "${exp?.name}"...`, status: "loading" });
     try {
       const result = await api.enableNFSExport(id);
       if (result.success) {
-        toast.success(`NFS export "${exp?.name}" enabled`);
+        setProgress({ message: `"${exp?.name}" enabled`, status: "success" });
       } else {
-        toast.error(`Enable failed: ${result.error || "Unknown error"}`);
+        setProgress({
+          message: "Enable failed",
+          status: "error",
+          detail: result.error || "Unknown error",
+        });
       }
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Enable failed",
+        status: "error",
+        detail: e.message,
+      });
     }
     setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleDisable = async (id) => {
     const exp = exports.find((e) => e.id === id);
     setLoading(`disable-${id}`);
+    setProgress({ message: `Disabling "${exp?.name}"...`, status: "loading" });
     try {
       const result = await api.disableNFSExport(id);
       if (result.success) {
-        toast.success(`NFS export "${exp?.name}" disabled`);
+        setProgress({ message: `"${exp?.name}" disabled`, status: "success" });
       } else {
-        toast.error(`Disable failed: ${result.error || "Unknown error"}`);
+        setProgress({
+          message: "Disable failed",
+          status: "error",
+          detail: result.error || "Unknown error",
+        });
       }
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Disable failed",
+        status: "error",
+        detail: e.message,
+      });
     }
     setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   const handleApplyAll = async () => {
@@ -202,18 +248,31 @@ export default function NFSExportsPage() {
     });
     if (!ok) return;
     setLoading("apply-all");
+    setProgress({ message: "Applying all NFS exports...", status: "loading" });
     try {
       const result = await api.applyNFSExports();
       if (result.success) {
-        toast.success("All NFS exports applied successfully");
+        setProgress({
+          message: "All NFS exports applied successfully",
+          status: "success",
+        });
       } else {
-        toast.error(`Apply failed: ${result.error || "Unknown error"}`);
+        setProgress({
+          message: "Apply failed",
+          status: "error",
+          detail: result.error || "Unknown error",
+        });
       }
       fetchData();
     } catch (e) {
-      toast.error(e.message);
+      setProgress({
+        message: "Apply failed",
+        status: "error",
+        detail: e.message,
+      });
     }
     setLoading("");
+    setTimeout(() => setProgress(null), 1500);
   };
 
   return (
@@ -231,7 +290,11 @@ export default function NFSExportsPage() {
             disabled={loading === "apply-all"}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
           >
-            <Zap className="w-4 h-4 text-nfs-primary" />
+            {loading === "apply-all" ? (
+              <Loader2 className="w-4 h-4 text-nfs-primary animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4 text-nfs-primary" />
+            )}
             Apply All
           </button>
           <button
@@ -336,7 +399,11 @@ export default function NFSExportsPage() {
                         className="p-2 rounded-lg text-nfs-muted hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Disable"
                       >
-                        <Square className="w-4 h-4" />
+                        {loading === `disable-${exp.id}` ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
                       </button>
                     ) : (
                       <button
@@ -345,7 +412,11 @@ export default function NFSExportsPage() {
                         className="p-2 rounded-lg text-nfs-muted hover:bg-emerald-500/10 hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
                         title="Enable"
                       >
-                        <Play className="w-4 h-4" />
+                        {loading === `enable-${exp.id}` ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
                       </button>
                     )}
                     <button
@@ -357,10 +428,15 @@ export default function NFSExportsPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(exp.id)}
-                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90"
+                      disabled={loading === `delete-${exp.id}`}
+                      className="p-2 rounded-lg text-nfs-muted hover:bg-red-500/10 hover:text-red-400 transition-all active:scale-90 disabled:opacity-50"
                       title="Delete"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {loading === `delete-${exp.id}` ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -521,9 +597,12 @@ export default function NFSExportsPage() {
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
+              disabled={loading === "save"}
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
             >
-              {editing ? (
+              {loading === "save" ? (
+                <Loader2 className="w-4 h-4 text-nfs-primary animate-spin" />
+              ) : editing ? (
                 <Save className="w-4 h-4 text-nfs-primary" />
               ) : (
                 <Plus className="w-4 h-4 text-nfs-primary" />
@@ -533,6 +612,7 @@ export default function NFSExportsPage() {
           </div>
         </Modal>
       )}
+      <ProgressDialog progress={progress} />
     </div>
   );
 }

@@ -345,6 +345,7 @@ async def get_all_export_statuses(db: AsyncSession = Depends(get_db)):
                 "allowed_hosts": exp.allowed_hosts,
                 "nfs_version": exp.nfs_version,
                 "is_active": is_active,
+                "auto_enable": exp.auto_enable,
             }
         )
     return statuses
