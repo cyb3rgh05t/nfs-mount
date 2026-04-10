@@ -68,13 +68,22 @@ def _build_export_line(export: NFSExport) -> str:
     return f"{export.export_path} {export.allowed_hosts}({export.options})"
 
 
-async def write_exports_file(db: AsyncSession) -> dict:
-    """Regenerate the managed section in /etc/exports from all enabled exports."""
-    result = await db.execute(
-        select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
-    )
-    exports = result.scalars().all()
-    logger.info(f"write_exports_file: found {len(exports)} enabled exports")
+async def write_exports_file(db: AsyncSession = None) -> dict:
+    """Regenerate the managed section in /etc/exports from all enabled exports.
+
+    Uses a fresh DB session to guarantee reading committed state.
+    """
+    async with async_session() as fresh_db:
+        result = await fresh_db.execute(
+            select(NFSExport).where(NFSExport.enabled == True)  # noqa: E712
+        )
+        exports = result.scalars().all()
+        logger.info(f"write_exports_file: found {len(exports)} enabled exports")
+        for exp in exports:
+            logger.info(
+                f"write_exports_file: export id={exp.id} name={exp.name} "
+                f"enabled={exp.enabled} path={exp.export_path}"
+            )
 
     exports_path = _get_exports_path()
     logger.info(f"write_exports_file: using exports path {exports_path}")
