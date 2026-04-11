@@ -47,6 +47,7 @@ import {
   Upload,
   Download,
   Flame,
+  Stethoscope,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -130,6 +131,7 @@ const tabs = [
   { id: "system", label: "System", icon: Wrench },
   { id: "firewall", label: "Firewall", icon: Flame },
   { id: "sshkeys", label: "SSH Keys", icon: KeyRound },
+  { id: "diagnostics", label: "Diagnostics", icon: Stethoscope },
   { id: "howto", label: "How To", icon: BookOpen },
   { id: "about", label: "About", icon: Info },
 ];
@@ -162,6 +164,8 @@ export default function SettingsPage() {
     null,
   );
   const [firewallLoading, setFirewallLoading] = useState(false);
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState(null);
   const [showNewKeyForm, setShowNewKeyForm] = useState(false);
@@ -613,12 +617,19 @@ export default function SettingsPage() {
         <button
           onClick={async () => {
             setRefreshing(true);
-            setProgress({ message: "Refreshing settings...", status: "loading" });
+            setProgress({
+              message: "Refreshing settings...",
+              status: "loading",
+            });
             try {
               await fetchData();
               setProgress({ message: "Settings refreshed", status: "success" });
             } catch (e) {
-              setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+              setProgress({
+                message: "Refresh failed",
+                status: "error",
+                detail: e.message,
+              });
             }
             setRefreshing(false);
             setTimeout(() => setProgress(null), 1500);
@@ -2061,6 +2072,363 @@ export default function SettingsPage() {
         </>
       )}
 
+      {/* Diagnostics Tab */}
+      {activeTab === "diagnostics" && (
+        <>
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-nfs-muted leading-relaxed">
+              Verify that NFS mounts, MergerFS, exports, and kernel parameters
+              are configured with optimal performance settings.
+            </p>
+            <button
+              onClick={async () => {
+                setDiagLoading(true);
+                try {
+                  const data = await api.getDiagnostics();
+                  setDiagnostics(data);
+                } catch (e) {
+                  toast.error(e.message);
+                } finally {
+                  setDiagLoading(false);
+                }
+              }}
+              disabled={diagLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-primary text-white rounded-lg hover:bg-nfs-primary/80 transition-colors text-sm font-medium disabled:opacity-50 shrink-0 ml-4"
+            >
+              {diagLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Stethoscope className="w-4 h-4" />
+              )}
+              {diagLoading ? "Scanning..." : "Run Diagnostics"}
+            </button>
+          </div>
+
+          {!diagnostics && !diagLoading && (
+            <div className="bg-nfs-card border border-nfs-border rounded-xl p-12 text-center">
+              <Stethoscope className="w-12 h-12 text-nfs-muted mx-auto mb-4" />
+              <p className="text-nfs-muted">
+                Click{" "}
+                <span className="text-white font-medium">Run Diagnostics</span>{" "}
+                to scan your system configuration.
+              </p>
+            </div>
+          )}
+
+          {diagnostics && (
+            <div className="space-y-6">
+              {/* NFS Mounts */}
+              <Section
+                icon={HardDrive}
+                title="NFS Mounts"
+                iconColor="bg-blue-500/10 text-blue-400"
+              >
+                {diagnostics.nfs_mounts.length === 0 ? (
+                  <p className="text-nfs-muted text-sm">No NFS mounts found.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {diagnostics.nfs_mounts.map((m, i) => (
+                      <div
+                        key={i}
+                        className="bg-nfs-input border border-nfs-border rounded-lg p-4"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <code className="text-sm text-white font-mono">
+                            {m.device}
+                          </code>
+                          <span className="text-nfs-muted text-xs">→</span>
+                          <code className="text-sm text-nfs-primary font-mono">
+                            {m.mount_point}
+                          </code>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(m.checks).map(([key, ok]) => (
+                            <span
+                              key={key}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono ${
+                                ok
+                                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                              }`}
+                            >
+                              {ok ? (
+                                <CheckCircle className="w-3 h-3" />
+                              ) : (
+                                <AlertCircle className="w-3 h-3" />
+                              )}
+                              {key}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-nfs-muted mt-2 font-mono break-all">
+                          {m.options}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              {/* Read-Ahead */}
+              <Section
+                icon={Zap}
+                title="Read-Ahead"
+                iconColor="bg-yellow-500/10 text-yellow-400"
+              >
+                {diagnostics.read_ahead.length === 0 ? (
+                  <p className="text-nfs-muted text-sm">
+                    No NFS BDI devices found.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {diagnostics.read_ahead.map((ra, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          ra.ok
+                            ? "bg-green-500/5 border-green-500/20"
+                            : "bg-red-500/5 border-red-500/20"
+                        }`}
+                      >
+                        {ra.ok ? (
+                          <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        )}
+                        <div>
+                          <code className="text-xs font-mono text-white">
+                            {ra.device}
+                          </code>
+                          <p className="text-xs text-nfs-muted">
+                            {ra.read_ahead_kb} KB
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              {/* MergerFS */}
+              <Section
+                icon={GitMerge}
+                title="MergerFS Mounts"
+                iconColor="bg-purple-500/10 text-purple-400"
+              >
+                {diagnostics.mergerfs_mounts.length === 0 ? (
+                  <p className="text-nfs-muted text-sm">
+                    No MergerFS mounts found.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {diagnostics.mergerfs_mounts.map((m, i) => (
+                      <div
+                        key={i}
+                        className="bg-nfs-input border border-nfs-border rounded-lg p-4"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <code className="text-sm text-white font-mono">
+                            {m.device}
+                          </code>
+                          <span className="text-nfs-muted text-xs">→</span>
+                          <code className="text-sm text-nfs-primary font-mono">
+                            {m.mount_point}
+                          </code>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {Object.entries(m.checks).map(([key, ok]) => (
+                            <span
+                              key={key}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono ${
+                                ok
+                                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                              }`}
+                            >
+                              {ok ? (
+                                <CheckCircle className="w-3 h-3" />
+                              ) : (
+                                <AlertCircle className="w-3 h-3" />
+                              )}
+                              {key}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-nfs-muted mt-2 font-mono break-all">
+                          {m.options}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              {/* NFS Exports */}
+              <Section
+                icon={Database}
+                title="NFS Exports"
+                iconColor="bg-teal-500/10 text-teal-400"
+              >
+                {diagnostics.nfs_exports.length === 0 ? (
+                  <p className="text-nfs-muted text-sm">
+                    No NFS exports found.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {diagnostics.nfs_exports.map((exp, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-start gap-3 p-3 rounded-lg border ${
+                          exp.async
+                            ? "bg-green-500/5 border-green-500/20"
+                            : "bg-red-500/5 border-red-500/20"
+                        }`}
+                      >
+                        {exp.async ? (
+                          <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        )}
+                        <code className="text-xs font-mono text-nfs-text break-all">
+                          {exp.line}
+                        </code>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+
+              {/* NFS Threads & Connections */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Section
+                  icon={Cpu}
+                  title="NFS Threads"
+                  iconColor="bg-orange-500/10 text-orange-400"
+                >
+                  <div className="flex items-center gap-3">
+                    {diagnostics.nfs_threads >= 128 ? (
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-400" />
+                    )}
+                    <span className="text-2xl font-bold text-white">
+                      {diagnostics.nfs_threads ?? "N/A"}
+                    </span>
+                    <span className="text-sm text-nfs-muted">threads</span>
+                  </div>
+                </Section>
+
+                <Section
+                  icon={Network}
+                  title="NFS Connections"
+                  iconColor="bg-cyan-500/10 text-cyan-400"
+                >
+                  <div className="flex items-center gap-3">
+                    <Activity className="w-5 h-5 text-nfs-primary" />
+                    <span className="text-2xl font-bold text-white">
+                      {diagnostics.nfs_connections}
+                    </span>
+                    <span className="text-sm text-nfs-muted">TCP on :2049</span>
+                  </div>
+                </Section>
+              </div>
+
+              {/* Kernel Parameters */}
+              <Section
+                icon={Terminal}
+                title="Kernel Parameters"
+                iconColor="bg-indigo-500/10 text-indigo-400"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  {Object.entries(diagnostics.kernel_params).map(
+                    ([param, info]) => (
+                      <div
+                        key={param}
+                        className={`flex items-center gap-3 p-3 rounded-lg border ${
+                          info.ok
+                            ? "bg-green-500/5 border-green-500/20"
+                            : "bg-red-500/5 border-red-500/20"
+                        }`}
+                      >
+                        {info.ok ? (
+                          <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <code className="text-xs font-mono text-white break-all">
+                            {param}
+                          </code>
+                          <p className="text-xs text-nfs-muted">
+                            {info.value ?? "not available"}
+                          </p>
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </Section>
+
+              {/* RPS/XPS */}
+              <Section
+                icon={Network}
+                title="RPS / XPS"
+                iconColor="bg-pink-500/10 text-pink-400"
+              >
+                {diagnostics.rps_xps.interface ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-nfs-muted">
+                      Interface:{" "}
+                      <code className="text-white font-mono">
+                        {diagnostics.rps_xps.interface}
+                      </code>
+                    </p>
+                    <div className="flex gap-4">
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                          diagnostics.rps_xps.rps_ok
+                            ? "bg-green-500/5 border-green-500/20"
+                            : "bg-red-500/5 border-red-500/20"
+                        }`}
+                      >
+                        {diagnostics.rps_xps.rps_ok ? (
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                        )}
+                        <span className="text-xs font-mono text-white">
+                          RPS: {diagnostics.rps_xps.rps}
+                        </span>
+                      </div>
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                          diagnostics.rps_xps.xps_ok
+                            ? "bg-green-500/5 border-green-500/20"
+                            : "bg-red-500/5 border-red-500/20"
+                        }`}
+                      >
+                        {diagnostics.rps_xps.xps_ok ? (
+                          <CheckCircle className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-400" />
+                        )}
+                        <span className="text-xs font-mono text-white">
+                          XPS: {diagnostics.rps_xps.xps}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-nfs-muted text-sm">
+                    Could not detect network interface.
+                  </p>
+                )}
+              </Section>
+            </div>
+          )}
+        </>
+      )}
+
       {/* How To Tab */}
       {activeTab === "howto" && (
         <>
@@ -2251,12 +2619,13 @@ Sources: /mnt/disk1,/mnt/disk2,/mnt/disk3`}</CodeBlock>
               Default MergerFS Options
             </h3>
             <CodeBlock>
-              {`rw,async_read=true,use_ino,allow_other,
+              {`rw,use_ino,allow_other,
 func.getattr=newest,category.action=all,
-category.create=ff,cache.files=auto-full,
+category.create=ff,cache.files=partial,
 cache.readdir=true,cache.statfs=3600,
 cache.attr=120,cache.entry=120,
 cache.negative_entry=60,dropcacheonclose=true,
+kernel_cache,splice_move,splice_read,direct_io,
 minfreespace=10G,fsname=mergerfs`}
             </CodeBlock>
             <h3 className="font-semibold text-white mt-3">API Endpoints</h3>

@@ -135,6 +135,7 @@ const api = {
   getNfsThreads: () => request("GET", "/system/nfs-threads"),
   setNfsThreads: (threads) =>
     request("POST", "/system/nfs-threads", { threads }),
+  getDiagnostics: () => request("GET", "/system/diagnostics"),
 
   // Notifications
   getNotificationConfigs: () => request("GET", "/notifications/configs"),

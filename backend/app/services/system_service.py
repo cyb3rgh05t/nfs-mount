@@ -574,3 +574,181 @@ async def apply_rps_xps(settings: dict, db: AsyncSession | None = None) -> dict:
     if errors:
         return {"success": False, "error": "; ".join(errors)}
     return {"success": True}
+
+
+async def get_diagnostics() -> dict:
+    """Collect full performance diagnostics for NFS, MergerFS, kernel params."""
+    diag = {
+        "nfs_mounts": [],
+        "mergerfs_mounts": [],
+        "nfs_exports": [],
+        "nfs_threads": None,
+        "read_ahead": [],
+        "kernel_params": {},
+        "rps_xps": {},
+        "nfs_connections": 0,
+    }
+
+    # NFS Mounts with options
+    r = await _run(["mount", "-t", "nfs,nfs4"])
+    if r.returncode == 0 and r.stdout.strip():
+        for line in r.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) >= 6:
+                opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
+                entry = {
+                    "device": parts[0],
+                    "mount_point": parts[2],
+                    "options": opts,
+                    "checks": {
+                        "nconnect": "nconnect=" in opts,
+                        "rsize": "rsize=" in opts,
+                        "wsize": "wsize=" in opts,
+                        "async": "async" in opts.split(","),
+                        "noatime": "noatime" in opts,
+                    },
+                }
+                diag["nfs_mounts"].append(entry)
+
+    # MergerFS mounts
+    r = await _run(["mount", "-t", "fuse.mergerfs"])
+    if r.returncode == 0 and r.stdout.strip():
+        for line in r.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) >= 6:
+                opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
+                entry = {
+                    "device": parts[0],
+                    "mount_point": parts[2],
+                    "options": opts,
+                    "checks": {
+                        "kernel_cache": "kernel_cache" in opts,
+                        "splice_move": "splice_move" in opts,
+                        "splice_read": "splice_read" in opts,
+                        "direct_io": "direct_io" in opts,
+                        "dropcacheonclose": "dropcacheonclose" in opts,
+                    },
+                }
+                diag["mergerfs_mounts"].append(entry)
+
+    # NFS exports
+    try:
+        cmd = ["exportfs", "-v"]
+        if os.path.isfile("/proc/1/root/etc/exports"):
+            cmd = ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--", "exportfs", "-v"]
+        r = await _run(cmd, timeout=15)
+        if r.returncode == 0 and r.stdout.strip():
+            lines = []
+            for raw in r.stdout.strip().split("\n"):
+                if not raw.strip():
+                    continue
+                if raw[0] in (" ", "\t") and lines:
+                    lines[-1] += " " + raw.strip()
+                else:
+                    lines.append(raw.strip())
+            for line in lines:
+                has_async = "async" in line
+                diag["nfs_exports"].append({"line": line, "async": has_async})
+    except Exception:
+        pass
+
+    # NFS threads
+    try:
+        with open("/proc/fs/nfsd/threads") as f:
+            diag["nfs_threads"] = int(f.read().strip())
+    except Exception:
+        pass
+
+    # Read-ahead for NFS BDIs
+    try:
+        for bdi in os.listdir("/sys/class/bdi"):
+            ra_path = f"/sys/class/bdi/{bdi}/read_ahead_kb"
+            if os.path.isfile(ra_path) and bdi.startswith("0:"):
+                with open(ra_path) as f:
+                    val = int(f.read().strip())
+                diag["read_ahead"].append(
+                    {"device": bdi, "read_ahead_kb": val, "ok": val >= 16384}
+                )
+    except Exception:
+        pass
+
+    # Kernel params
+    params = {
+        "sunrpc.tcp_max_slot_table_entries": {"min": 128},
+        "net.core.rmem_max": {"min": 134217728},
+        "net.core.wmem_max": {"min": 134217728},
+        "net.ipv4.tcp_congestion_control": {"expected": "bbr"},
+        "net.core.default_qdisc": {"expected": "fq"},
+        "vm.dirty_ratio": {"min": 30},
+        "vm.dirty_background_ratio": {"min": 5},
+        "net.core.netdev_budget": {"min": 300},
+        "net.core.optmem_max": {"min": 262144},
+    }
+    for param, check in params.items():
+        try:
+            r = await _run(["sysctl", "-n", param], timeout=3)
+            val = r.stdout.strip() if r.returncode == 0 else None
+            ok = False
+            if val is not None:
+                if "expected" in check:
+                    ok = val == check["expected"]
+                elif "min" in check:
+                    try:
+                        ok = int(val) >= check["min"]
+                    except ValueError:
+                        ok = False
+            diag["kernel_params"][param] = {"value": val, "ok": ok}
+        except Exception:
+            diag["kernel_params"][param] = {"value": None, "ok": False}
+
+    # RPS/XPS
+    try:
+        eth = None
+        r = await _run(["ip", "-o", "link", "show"])
+        if r.returncode == 0:
+            for line in r.stdout.split("\n"):
+                if line and not any(
+                    x in line for x in ["lo:", "docker", "br-", "veth", "wg"]
+                ):
+                    eth = line.split(":")[1].strip().split("@")[0]
+                    break
+        if eth:
+            diag["rps_xps"]["interface"] = eth
+            rps_path = f"/sys/class/net/{eth}/queues/rx-0/rps_cpus"
+            xps_path = f"/sys/class/net/{eth}/queues/tx-0/xps_cpus"
+            if os.path.isfile(rps_path):
+                with open(rps_path) as f:
+                    rps = f.read().strip()
+                diag["rps_xps"]["rps"] = rps
+                diag["rps_xps"]["rps_ok"] = rps not in (
+                    "0",
+                    "00000000",
+                    "00000000,00000000",
+                )
+            if os.path.isfile(xps_path):
+                with open(xps_path) as f:
+                    xps = f.read().strip()
+                diag["rps_xps"]["xps"] = xps
+                diag["rps_xps"]["xps_ok"] = xps not in (
+                    "0",
+                    "00000000",
+                    "00000000,00000000",
+                )
+    except Exception:
+        pass
+
+    # NFS TCP connections
+    try:
+        r = await _run(["ss", "-ant"])
+        if r.returncode == 0:
+            diag["nfs_connections"] = sum(
+                1 for l in r.stdout.split("\n") if ":2049" in l
+            )
+    except Exception:
+        pass
+
+    return diag

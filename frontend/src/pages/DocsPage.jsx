@@ -265,12 +265,13 @@ Sources: /mnt/disk1,/mnt/disk2,/mnt/disk3`}</CodeBlock>
           Default MergerFS Options
         </h3>
         <CodeBlock>
-          {`rw,async_read=true,use_ino,allow_other,
+          {`rw,use_ino,allow_other,
 func.getattr=newest,category.action=all,
-category.create=ff,cache.files=auto-full,
+category.create=ff,cache.files=partial,
 cache.readdir=true,cache.statfs=3600,
 cache.attr=120,cache.entry=120,
 cache.negative_entry=60,dropcacheonclose=true,
+kernel_cache,splice_move,splice_read,direct_io,
 minfreespace=10G,fsname=mergerfs`}
         </CodeBlock>
         <h3 className="font-semibold text-white mt-3">API Endpoints</h3>

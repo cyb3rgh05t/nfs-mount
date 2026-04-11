@@ -20,7 +20,7 @@ import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
 
 const DEFAULT_OPTIONS =
-  "rw,async_read=true,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=auto-full,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,minfreespace=10G,fsname=mergerfs";
+  "rw,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,kernel_cache,splice_move,splice_read,direct_io,minfreespace=10G,fsname=mergerfs";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -258,12 +258,22 @@ export default function MergerFSPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              setProgress({ message: "Refreshing MergerFS configs...", status: "loading" });
+              setProgress({
+                message: "Refreshing MergerFS configs...",
+                status: "loading",
+              });
               try {
                 await fetchData();
-                setProgress({ message: "MergerFS configs refreshed", status: "success" });
+                setProgress({
+                  message: "MergerFS configs refreshed",
+                  status: "success",
+                });
               } catch (e) {
-                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+                setProgress({
+                  message: "Refresh failed",
+                  status: "error",
+                  detail: e.message,
+                });
               }
               setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);

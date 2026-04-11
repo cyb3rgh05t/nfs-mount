@@ -56,7 +56,10 @@ async def mount_nfs(mount: NFSMount) -> dict:
     """Mount a single NFS share."""
     local = mount.local_path
     remote = f"{mount.server_ip}:{mount.remote_path}"
-    options = mount.options or "vers=4.2,proto=tcp,hard"
+    options = (
+        mount.options
+        or "vers=4.2,proto=tcp,hard,nconnect=16,rsize=1048576,wsize=1048576,async,noatime,nocto,ac,actimeo=3600"
+    )
 
     # Unmount first if already mounted (clean remount)
     if is_mounted(local):
@@ -80,6 +83,23 @@ async def mount_nfs(mount: NFSMount) -> dict:
 
     # Update client firewall to allow traffic to this server
     await firewall_service.apply_client_firewall()
+
+    # NFS read-ahead tuning (16MB for smooth 4K streaming)
+    try:
+        for bdi in os.listdir("/sys/class/bdi"):
+            bdi_path = f"/sys/class/bdi/{bdi}"
+            ra_path = f"{bdi_path}/read_ahead_kb"
+            if os.path.isfile(ra_path):
+                try:
+                    with open(ra_path) as f:
+                        current = f.read().strip()
+                    if int(current) < 16384:
+                        with open(ra_path, "w") as f:
+                            f.write("16384")
+                except (ValueError, PermissionError, OSError):
+                    pass
+    except OSError:
+        pass
 
     logger.info(f"NFS mount successful: {local}")
     return {"success": True, "name": mount.name}

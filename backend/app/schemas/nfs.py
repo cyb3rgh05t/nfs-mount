@@ -60,7 +60,7 @@ class NFSExportBase(BaseModel):
     name: str
     export_path: str
     allowed_hosts: str = "*"
-    options: str = "rw,sync,no_subtree_check,no_root_squash"
+    options: str = "rw,async,no_subtree_check,all_squash,anonuid=1000,anongid=1000"
     nfs_version: str = "4.2"
     enabled: bool = True
     auto_enable: bool = True

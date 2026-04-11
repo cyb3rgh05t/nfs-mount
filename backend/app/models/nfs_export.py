@@ -17,7 +17,7 @@ class NFSExport(Base):
     allowed_hosts: Mapped[str] = mapped_column(String(512), default="*")
     options: Mapped[str] = mapped_column(
         Text,
-        default="rw,sync,no_subtree_check,no_root_squash",
+        default="rw,async,no_subtree_check,all_squash,anonuid=1000,anongid=1000",
     )
     nfs_version: Mapped[str] = mapped_column(String(10), default="4.2")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

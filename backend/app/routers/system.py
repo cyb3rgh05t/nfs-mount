@@ -85,3 +85,8 @@ async def set_nfs_threads(data: dict):
     count = data.get("threads", 512)
     logger.info("Setting NFS threads to %d", count)
     return await system_service.set_nfs_threads(count)
+
+
+@router.get("/diagnostics")
+async def diagnostics():
+    return await system_service.get_diagnostics()
