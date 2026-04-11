@@ -616,7 +616,6 @@ async def get_diagnostics() -> dict:
     # MergerFS mounts
     # Collect mergerfs process command lines from /proc for accurate option detection
     mergerfs_cmdlines = {}
-    _mergerfs_debug = {"proc_matches": [], "xattr_errors": {}, "source": {}}
     try:
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
@@ -628,9 +627,6 @@ async def get_diagnostics() -> dict:
                 args = raw.decode("utf-8", errors="replace").split("\x00")
                 if not any("mergerfs" in a for a in args[:2]):
                     continue
-                _mergerfs_debug["proc_matches"].append(
-                    {"pid": pid, "args": [a for a in args if a]}
-                )
                 opt_str = ""
                 mp = ""
                 for i, a in enumerate(args):
@@ -681,14 +677,12 @@ async def get_diagnostics() -> dict:
                         full_opts = raw.decode("utf-8", errors="replace")
                         source_used = "xattr"
                     except (OSError, AttributeError) as xe:
-                        _mergerfs_debug["xattr_errors"][mount_point] = str(xe)
-                        db_opts = mergerfs_db_opts.get(mount_point, "")
+                            db_opts = mergerfs_db_opts.get(mount_point, "")
                         if db_opts:
                             full_opts = db_opts
                             source_used = "database"
                         else:
                             full_opts = opts
-                _mergerfs_debug["source"][mount_point] = source_used
                 entry = {
                     "device": parts[0],
                     "mount_point": mount_point,
@@ -704,8 +698,6 @@ async def get_diagnostics() -> dict:
                     },
                 }
                 diag["mergerfs_mounts"].append(entry)
-
-    diag["_mergerfs_debug"] = _mergerfs_debug
 
     # NFS exports
     try:

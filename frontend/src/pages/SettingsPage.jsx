@@ -2093,7 +2093,7 @@ export default function SettingsPage() {
                 }
               }}
               disabled={diagLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-nfs-primary text-white rounded-lg hover:bg-nfs-primary/80 transition-colors text-sm font-medium disabled:opacity-50 shrink-0 ml-4"
+              className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
             >
               {diagLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -2255,8 +2255,13 @@ export default function SettingsPage() {
                           ))}
                         </div>
                         <p className="text-xs text-nfs-muted mt-2 font-mono break-all">
-                          {m.options}
+                          {m.full_options || m.options}
                         </p>
+                        {m.options_source && (
+                          <p className="text-[10px] text-purple-400 mt-1">
+                            Options verified via: {m.options_source}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
