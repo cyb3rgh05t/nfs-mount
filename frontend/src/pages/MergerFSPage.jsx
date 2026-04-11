@@ -20,7 +20,7 @@ import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
 
 const DEFAULT_OPTIONS =
-  "rw,use_ino,allow_other,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,cache.readdir=true,cache.statfs=3600,cache.attr=120,cache.entry=120,cache.negative_entry=60,dropcacheonclose=true,kernel_cache,splice_move,splice_read,direct_io,minfreespace=10G,fsname=mergerfs";
+  "rw,use_ino,allow_other,statfs_ignore=nc,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,dropcacheonclose=true,kernel_cache,splice_move,splice_read,direct_io,fsname=mergerfs";
 
 function Modal({ title, onClose, children }) {
   return (

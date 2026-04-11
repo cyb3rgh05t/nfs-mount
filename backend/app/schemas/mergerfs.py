@@ -7,12 +7,10 @@ class MergerFSBase(BaseModel):
     mount_point: str
     sources: list[str]
     options: str = (
-        "rw,async_read=true,use_ino,allow_other,"
+        "rw,use_ino,allow_other,statfs_ignore=nc,"
         "func.getattr=newest,category.action=all,category.create=ff,"
-        "cache.files=auto-full,cache.readdir=true,"
-        "cache.statfs=3600,cache.attr=120,cache.entry=120,"
-        "cache.negative_entry=60,dropcacheonclose=true,"
-        "minfreespace=10G,fsname=mergerfs"
+        "cache.files=partial,dropcacheonclose=true,"
+        "kernel_cache,splice_move,splice_read,direct_io,fsname=mergerfs"
     )
     auto_mount: bool = True
     enabled: bool = True

@@ -614,6 +614,51 @@ async def get_diagnostics() -> dict:
                 diag["nfs_mounts"].append(entry)
 
     # MergerFS mounts
+    # Collect mergerfs process command lines from /proc for accurate option detection
+    mergerfs_cmdlines = {}
+    try:
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                cmdline_path = f"/proc/{pid}/cmdline"
+                with open(cmdline_path, "rb") as f:
+                    raw = f.read()
+                args = raw.decode("utf-8", errors="replace").split("\x00")
+                if not any("mergerfs" in a for a in args[:2]):
+                    continue
+                # Parse: mergerfs [-o options] src1:src2 mount_point
+                # or: mergerfs src1:src2 mount_point -o options
+                opt_str = ""
+                mp = ""
+                for i, a in enumerate(args):
+                    if a == "-o" and i + 1 < len(args):
+                        opt_str = args[i + 1]
+                    elif (
+                        a.startswith("/") and ":" not in a and not a.startswith("/proc")
+                    ):
+                        mp = a
+                if mp and opt_str:
+                    mergerfs_cmdlines[mp] = opt_str
+            except (OSError, PermissionError):
+                continue
+    except OSError:
+        pass
+
+    # Also check DB for configured options as cross-reference
+    mergerfs_db_opts = {}
+    try:
+        from ..database import async_session as _async_session
+        from ..models.mergerfs_config import MergerFSConfig
+        from sqlalchemy import select as _select
+
+        async with _async_session() as _db:
+            res = await _db.execute(_select(MergerFSConfig))
+            for cfg in res.scalars().all():
+                mergerfs_db_opts[cfg.mount_point] = cfg.options or ""
+    except Exception:
+        pass
+
     r = await _run(["mount", "-t", "fuse.mergerfs"])
     if r.returncode == 0 and r.stdout.strip():
         for line in r.stdout.strip().split("\n"):
@@ -623,17 +668,19 @@ async def get_diagnostics() -> dict:
             if len(parts) >= 6:
                 opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
                 mount_point = parts[2]
-                # Try reading mergerfs runtime config via xattr for accurate option detection
-                full_opts = opts
-                try:
-                    raw = os.getxattr(mount_point, "user.mergerfs.options")
-                    full_opts = raw.decode("utf-8", errors="replace")
-                except (OSError, AttributeError):
-                    pass
+                # Priority: /proc cmdline > xattr > DB config > mount output
+                full_opts = mergerfs_cmdlines.get(mount_point, "")
+                if not full_opts:
+                    try:
+                        raw = os.getxattr(mount_point, "user.mergerfs.options")
+                        full_opts = raw.decode("utf-8", errors="replace")
+                    except (OSError, AttributeError):
+                        full_opts = mergerfs_db_opts.get(mount_point, opts)
                 entry = {
                     "device": parts[0],
                     "mount_point": mount_point,
                     "options": opts,
+                    "full_options": full_opts,
                     "checks": {
                         "kernel_cache": "kernel_cache" in full_opts,
                         "splice_move": "splice_move" in full_opts,
