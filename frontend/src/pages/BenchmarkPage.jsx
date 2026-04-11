@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Gauge,
   HardDrive,
@@ -8,30 +8,75 @@ import {
   ArrowDown,
   ArrowUp,
   RefreshCw,
+  Award,
+  ChevronDown,
+  Server,
+  GitMerge,
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
 import api from "../api/client";
 
 export default function BenchmarkPage() {
   const toast = useToast();
-  const [nfsMounts, setNfsMounts] = useState([]);
+  const [allMounts, setAllMounts] = useState([]);
   const [selectedMount, setSelectedMount] = useState("");
   const [fileSize, setFileSize] = useState(256);
   const [benchRunning, setBenchRunning] = useState(false);
   const [benchResult, setBenchResult] = useState(null);
   const [history, setHistory] = useState([]);
+  const [mountOpen, setMountOpen] = useState(false);
+  const [sizeOpen, setSizeOpen] = useState(false);
+  const mountRef = useRef(null);
+  const sizeRef = useRef(null);
+
+  const fileSizeOptions = [
+    { value: 64, label: "64 MB" },
+    { value: 128, label: "128 MB" },
+    { value: 256, label: "256 MB" },
+    { value: 512, label: "512 MB" },
+    { value: 1024, label: "1 GB" },
+    { value: 2048, label: "2 GB" },
+    { value: 10240, label: "10 GB" },
+    { value: 51200, label: "50 GB" },
+  ];
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (mountRef.current && !mountRef.current.contains(e.target))
+        setMountOpen(false);
+      if (sizeRef.current && !sizeRef.current.contains(e.target))
+        setSizeOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   useEffect(() => {
-    api
-      .getNFSStatus()
-      .then((mounts) => {
-        const mounted = (mounts || []).filter((m) => m.mounted);
-        setNfsMounts(mounted);
-        if (mounted.length > 0 && !selectedMount) {
-          setSelectedMount(mounted[0].local_path);
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      api.getNFSStatus().catch(() => []),
+      api.getMergerFSStatus().catch(() => []),
+    ]).then(([nfs, mergerfs]) => {
+      const nfsMounted = (nfs || [])
+        .filter((m) => m.mounted)
+        .map((m) => ({
+          path: m.local_path,
+          label: `[NFS] ${m.name} — ${m.local_path}`,
+          type: "nfs",
+        }));
+      const mfsMounted = (mergerfs || [])
+        .filter((m) => m.mounted)
+        .map((m) => ({
+          path: m.mount_point,
+          label: `[MergerFS] ${m.name} — ${m.mount_point}`,
+          type: "mergerfs",
+        }));
+      const combined = [...nfsMounted, ...mfsMounted];
+      setAllMounts(combined);
+      if (combined.length > 0 && !selectedMount) {
+        setSelectedMount(combined[0].path);
+      }
+    });
   }, []);
 
   const runBenchmark = async () => {
@@ -74,6 +119,105 @@ export default function BenchmarkPage() {
     return "text-red-400";
   };
 
+  const speedBadge = (mbps) => {
+    if (mbps >= 800)
+      return {
+        label: "Excellent",
+        bg: "bg-green-500/15",
+        text: "text-green-400",
+        border: "border-green-500/30",
+      };
+    if (mbps >= 400)
+      return {
+        label: "Good",
+        bg: "bg-yellow-500/15",
+        text: "text-yellow-400",
+        border: "border-yellow-500/30",
+      };
+    if (mbps >= 100)
+      return {
+        label: "Fair",
+        bg: "bg-orange-500/15",
+        text: "text-orange-400",
+        border: "border-orange-500/30",
+      };
+    return {
+      label: "Poor",
+      bg: "bg-red-500/15",
+      text: "text-red-400",
+      border: "border-red-500/30",
+    };
+  };
+
+  const latencyBadge = (ms) => {
+    if (ms <= 5)
+      return {
+        label: "Excellent",
+        bg: "bg-green-500/15",
+        text: "text-green-400",
+        border: "border-green-500/30",
+      };
+    if (ms <= 20)
+      return {
+        label: "Good",
+        bg: "bg-yellow-500/15",
+        text: "text-yellow-400",
+        border: "border-yellow-500/30",
+      };
+    if (ms <= 50)
+      return {
+        label: "Fair",
+        bg: "bg-orange-500/15",
+        text: "text-orange-400",
+        border: "border-orange-500/30",
+      };
+    return {
+      label: "Poor",
+      bg: "bg-red-500/15",
+      text: "text-red-400",
+      border: "border-red-500/30",
+    };
+  };
+
+  const iopsBadge = (ops) => {
+    if (ops >= 500)
+      return {
+        label: "Excellent",
+        bg: "bg-green-500/15",
+        text: "text-green-400",
+        border: "border-green-500/30",
+      };
+    if (ops >= 200)
+      return {
+        label: "Good",
+        bg: "bg-yellow-500/15",
+        text: "text-yellow-400",
+        border: "border-yellow-500/30",
+      };
+    if (ops >= 50)
+      return {
+        label: "Fair",
+        bg: "bg-orange-500/15",
+        text: "text-orange-400",
+        border: "border-orange-500/30",
+      };
+    return {
+      label: "Poor",
+      bg: "bg-red-500/15",
+      text: "text-red-400",
+      border: "border-red-500/30",
+    };
+  };
+
+  const Badge = ({ badge }) => (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border ${badge.bg} ${badge.text} ${badge.border}`}
+    >
+      <Award className="w-3 h-3" />
+      {badge.label}
+    </span>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -90,11 +234,11 @@ export default function BenchmarkPage() {
         </p>
       </div>
 
-      {nfsMounts.length === 0 ? (
+      {allMounts.length === 0 ? (
         <div className="bg-nfs-card border border-nfs-border rounded-xl p-12 text-center">
           <HardDrive className="w-12 h-12 text-nfs-muted mx-auto mb-4" />
           <p className="text-nfs-muted">
-            No mounted NFS shares found. Mount an NFS share first to run
+            No mounted NFS or MergerFS shares found. Mount a share first to run
             benchmarks.
           </p>
         </div>
@@ -103,50 +247,127 @@ export default function BenchmarkPage() {
           {/* Controls */}
           <div className="bg-nfs-card border border-nfs-border rounded-xl p-5">
             <div className="flex flex-wrap items-end gap-4">
-              <div className="flex-1 min-w-[220px]">
+              <div className="flex-1 min-w-[220px]" ref={mountRef}>
                 <label className="block text-sm text-nfs-muted mb-1.5 font-medium">
-                  NFS Mount
+                  Mount Point
                 </label>
-                <select
-                  value={selectedMount}
-                  onChange={(e) => setSelectedMount(e.target.value)}
-                  className="w-full bg-nfs-input border border-nfs-border text-white rounded-lg px-3 py-2.5 text-sm focus:border-nfs-primary outline-none"
-                >
-                  {nfsMounts.map((m) => (
-                    <option key={m.local_path} value={m.local_path}>
-                      {m.name} — {m.local_path}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMountOpen(!mountOpen);
+                      setSizeOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between bg-nfs-input border border-nfs-border text-white rounded-lg px-3 py-2.5 text-sm hover:border-nfs-muted focus:border-nfs-primary outline-none transition-colors"
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      {(() => {
+                        const sel = allMounts.find(
+                          (m) => m.path === selectedMount,
+                        );
+                        if (!sel)
+                          return (
+                            <span className="text-nfs-muted">
+                              Select mount...
+                            </span>
+                          );
+                        return (
+                          <>
+                            {sel.type === "mergerfs" ? (
+                              <GitMerge className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            ) : (
+                              <Server className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                            )}
+                            <span className="truncate">{sel.label}</span>
+                          </>
+                        );
+                      })()}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-nfs-muted shrink-0 ml-2 transition-transform ${mountOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {mountOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-nfs-card border border-nfs-border rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                      {allMounts.map((m) => (
+                        <button
+                          key={m.path}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMount(m.path);
+                            setMountOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-nfs-primary/10 transition-colors ${
+                            m.path === selectedMount
+                              ? "bg-nfs-primary/10 text-nfs-primary"
+                              : "text-white"
+                          }`}
+                        >
+                          {m.type === "mergerfs" ? (
+                            <GitMerge className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                          ) : (
+                            <Server className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                          )}
+                          <span className="truncate">{m.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="w-40">
+              <div className="w-40" ref={sizeRef}>
                 <label className="block text-sm text-nfs-muted mb-1.5 font-medium">
                   Test File Size
                 </label>
-                <select
-                  value={fileSize}
-                  onChange={(e) => setFileSize(Number(e.target.value))}
-                  className="w-full bg-nfs-input border border-nfs-border text-white rounded-lg px-3 py-2.5 text-sm focus:border-nfs-primary outline-none"
-                >
-                  <option value={64}>64 MB</option>
-                  <option value={128}>128 MB</option>
-                  <option value={256}>256 MB</option>
-                  <option value={512}>512 MB</option>
-                  <option value={1024}>1 GB</option>
-                  <option value={2048}>2 GB</option>
-                  <option value={10240}>10 GB</option>
-                  <option value={51200}>50 GB</option>
-                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSizeOpen(!sizeOpen);
+                      setMountOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between bg-nfs-input border border-nfs-border text-white rounded-lg px-3 py-2.5 text-sm hover:border-nfs-muted focus:border-nfs-primary outline-none transition-colors"
+                  >
+                    <span>
+                      {fileSizeOptions.find((o) => o.value === fileSize)
+                        ?.label || fileSize}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-nfs-muted shrink-0 ml-2 transition-transform ${sizeOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  {sizeOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-nfs-card border border-nfs-border rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                      {fileSizeOptions.map((o) => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => {
+                            setFileSize(o.value);
+                            setSizeOpen(false);
+                          }}
+                          className={`w-full px-3 py-2.5 text-sm text-left hover:bg-nfs-primary/10 transition-colors ${
+                            o.value === fileSize
+                              ? "bg-nfs-primary/10 text-nfs-primary"
+                              : "text-white"
+                          }`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 onClick={runBenchmark}
                 disabled={benchRunning || !selectedMount}
-                className="flex items-center gap-2 px-6 py-2.5 bg-nfs-primary text-black rounded-lg text-sm font-semibold hover:bg-nfs-primary/90 transition-all disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
               >
                 {benchRunning ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-nfs-primary" />
                 ) : (
-                  <Play className="w-4 h-4" />
+                  <Play className="w-4 h-4  text-nfs-primary" />
                 )}
                 {benchRunning ? "Running..." : "Start Benchmark"}
               </button>
@@ -194,15 +415,20 @@ export default function BenchmarkPage() {
                     </p>
                   ) : benchResult.write ? (
                     <>
-                      <p
-                        className={`text-3xl font-bold ${speedColor(benchResult.write.speed_mbps)}`}
-                      >
-                        {benchResult.write.speed_mbps}
-                        <span className="text-sm text-nfs-muted font-normal ml-1">
-                          MB/s
-                        </span>
-                      </p>
-                      <p className="text-xs text-nfs-muted mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p
+                          className={`text-3xl font-bold ${speedColor(benchResult.write.speed_mbps)}`}
+                        >
+                          {benchResult.write.speed_mbps}
+                          <span className="text-sm text-nfs-muted font-normal ml-1">
+                            MB/s
+                          </span>
+                        </p>
+                        <Badge
+                          badge={speedBadge(benchResult.write.speed_mbps)}
+                        />
+                      </div>
+                      <p className="text-xs text-nfs-muted mt-1">
                         {benchResult.write.size_mb >= 1024
                           ? `${(benchResult.write.size_mb / 1024).toFixed(0)} GB`
                           : `${benchResult.write.size_mb} MB`}{" "}
@@ -230,15 +456,20 @@ export default function BenchmarkPage() {
                     </p>
                   ) : benchResult.read ? (
                     <>
-                      <p
-                        className={`text-3xl font-bold ${speedColor(benchResult.read.speed_mbps)}`}
-                      >
-                        {benchResult.read.speed_mbps}
-                        <span className="text-sm text-nfs-muted font-normal ml-1">
-                          MB/s
-                        </span>
-                      </p>
-                      <p className="text-xs text-nfs-muted mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p
+                          className={`text-3xl font-bold ${speedColor(benchResult.read.speed_mbps)}`}
+                        >
+                          {benchResult.read.speed_mbps}
+                          <span className="text-sm text-nfs-muted font-normal ml-1">
+                            MB/s
+                          </span>
+                        </p>
+                        <Badge
+                          badge={speedBadge(benchResult.read.speed_mbps)}
+                        />
+                      </div>
+                      <p className="text-xs text-nfs-muted mt-1">
                         {benchResult.read.size_mb >= 1024
                           ? `${(benchResult.read.size_mb / 1024).toFixed(0)} GB`
                           : `${benchResult.read.size_mb} MB`}{" "}
@@ -266,15 +497,20 @@ export default function BenchmarkPage() {
                     </p>
                   ) : benchResult.latency ? (
                     <>
-                      <p
-                        className={`text-3xl font-bold ${latencyColor(benchResult.latency.avg_ms)}`}
-                      >
-                        {benchResult.latency.avg_ms}
-                        <span className="text-sm text-nfs-muted font-normal ml-1">
-                          ms
-                        </span>
-                      </p>
-                      <p className="text-xs text-nfs-muted mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p
+                          className={`text-3xl font-bold ${latencyColor(benchResult.latency.avg_ms)}`}
+                        >
+                          {benchResult.latency.avg_ms}
+                          <span className="text-sm text-nfs-muted font-normal ml-1">
+                            ms
+                          </span>
+                        </p>
+                        <Badge
+                          badge={latencyBadge(benchResult.latency.avg_ms)}
+                        />
+                      </div>
+                      <p className="text-xs text-nfs-muted mt-1">
                         min {benchResult.latency.min_ms}ms / max{" "}
                         {benchResult.latency.max_ms}ms (
                         {benchResult.latency.samples} samples)
@@ -301,13 +537,20 @@ export default function BenchmarkPage() {
                     </p>
                   ) : benchResult.metadata ? (
                     <>
-                      <p className="text-3xl font-bold text-white">
-                        {benchResult.metadata.create_ops_per_sec}
-                        <span className="text-sm text-nfs-muted font-normal ml-1">
-                          create/s
-                        </span>
-                      </p>
-                      <p className="text-xs text-nfs-muted mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-3xl font-bold text-white">
+                          {benchResult.metadata.create_ops_per_sec}
+                          <span className="text-sm text-nfs-muted font-normal ml-1">
+                            create/s
+                          </span>
+                        </p>
+                        <Badge
+                          badge={iopsBadge(
+                            benchResult.metadata.create_ops_per_sec,
+                          )}
+                        />
+                      </div>
+                      <p className="text-xs text-nfs-muted mt-1">
                         {benchResult.metadata.stat_ops_per_sec} stat/s (
                         {benchResult.metadata.num_files} files)
                       </p>
