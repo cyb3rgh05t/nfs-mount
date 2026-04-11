@@ -71,7 +71,10 @@ export default function LogsPage() {
 
   const handleExport = () => {
     const text = filteredLogs
-      .map((l) => `${l.timestamp} | ${l.level.padEnd(8)} | ${l.source} | ${l.message}`)
+      .map(
+        (l) =>
+          `${l.timestamp} | ${l.level.padEnd(8)} | ${l.source} | ${l.message}`,
+      )
       .join("\n");
     const blob = new Blob([text], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -218,7 +221,12 @@ export default function LogsPage() {
           <>
             <span>•</span>
             <span className="text-red-400">
-              {logs.filter((l) => l.level === "ERROR" || l.level === "CRITICAL").length} errors
+              {
+                logs.filter(
+                  (l) => l.level === "ERROR" || l.level === "CRITICAL",
+                ).length
+              }{" "}
+              errors
             </span>
             <span className="text-yellow-400">
               {logs.filter((l) => l.level === "WARNING").length} warnings
@@ -261,7 +269,9 @@ export default function LogsPage() {
                   <span className="text-slate-500 shrink-0 w-[220px] truncate">
                     {entry.source}
                   </span>
-                  <span className="text-slate-300 break-all">{entry.message}</span>
+                  <span className="text-slate-300 break-all">
+                    {entry.message}
+                  </span>
                 </div>
               ))}
               <div ref={logEndRef} />

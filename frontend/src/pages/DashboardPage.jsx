@@ -803,7 +803,9 @@ export default function DashboardPage() {
               <ScrollText className="w-4 h-4 text-purple-400" />
             </div>
             <h2 className="text-lg font-semibold text-white">Recent Logs</h2>
-            <span className="text-xs text-nfs-muted">Last {recentLogs.length} entries</span>
+            <span className="text-xs text-nfs-muted">
+              Last {recentLogs.length} entries
+            </span>
           </div>
           <button
             onClick={() => navigate("/logs")}
@@ -815,10 +817,15 @@ export default function DashboardPage() {
         <div className="bg-[#0d1117] rounded-lg overflow-hidden">
           <div className="overflow-auto max-h-[280px] p-3 font-mono text-[11px] leading-relaxed">
             {recentLogs.length === 0 ? (
-              <div className="text-center text-nfs-muted py-8">No log entries</div>
+              <div className="text-center text-nfs-muted py-8">
+                No log entries
+              </div>
             ) : (
               recentLogs.map((entry, i) => (
-                <div key={i} className="flex gap-2 py-0.5 hover:bg-white/[0.02]">
+                <div
+                  key={i}
+                  className="flex gap-2 py-0.5 hover:bg-white/[0.02]"
+                >
                   <span className="text-nfs-muted/50 shrink-0 w-[52px]">
                     {entry.timestamp ? entry.timestamp.split(" ")[1] || "" : ""}
                   </span>
@@ -835,7 +842,9 @@ export default function DashboardPage() {
                   >
                     {entry.level}
                   </span>
-                  <span className="text-slate-300 truncate">{entry.message}</span>
+                  <span className="text-slate-300 truncate">
+                    {entry.message}
+                  </span>
                 </div>
               ))
             )}

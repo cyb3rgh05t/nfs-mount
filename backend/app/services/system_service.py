@@ -293,12 +293,14 @@ def get_logs(lines: int = 100, level: str | None = None) -> list[dict]:
             if level and entry_level != level.upper():
                 continue
 
-            entries.append({
-                "timestamp": timestamp,
-                "level": entry_level,
-                "source": source,
-                "message": message,
-            })
+            entries.append(
+                {
+                    "timestamp": timestamp,
+                    "level": entry_level,
+                    "source": source,
+                    "message": message,
+                }
+            )
 
         # Return last N entries
         return entries[-lines:]
