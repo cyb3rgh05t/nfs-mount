@@ -12,6 +12,7 @@ import {
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import ProgressDialog from "../components/ProgressDialog";
+import CustomSelect from "../components/CustomSelect";
 
 const LEVEL_COLORS = {
   DEBUG: "text-cyan-400 bg-cyan-400/10",
@@ -142,33 +143,26 @@ export default function LogsPage() {
           {/* Level Filter */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-nfs-muted" />
-            <select
+            <CustomSelect
               value={level}
-              onChange={(e) => setLevel(e.target.value)}
-              className="bg-nfs-input border border-nfs-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-nfs-primary"
-            >
-              {LEVEL_OPTIONS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+              onChange={setLevel}
+              className="w-[130px]"
+              options={LEVEL_OPTIONS.map((l) => ({ value: l, label: l }))}
+            />
           </div>
 
           {/* Lines Count */}
           <div className="flex items-center gap-2">
             <span className="text-sm text-nfs-muted">Lines:</span>
-            <select
+            <CustomSelect
               value={lines}
-              onChange={(e) => setLines(Number(e.target.value))}
-              className="bg-nfs-input border border-nfs-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-nfs-primary"
-            >
-              {[100, 250, 500, 1000, 2500, 5000].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setLines(Number(val))}
+              className="w-[100px]"
+              options={[100, 250, 500, 1000, 2500, 5000].map((n) => ({
+                value: n,
+                label: String(n),
+              }))}
+            />
           </div>
 
           {/* Search */}

@@ -28,6 +28,7 @@ import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
+import CustomSelect from "../components/CustomSelect";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -278,18 +279,15 @@ export default function ServerMonitorPage() {
         </Field>
       </div>
       <Field label="SSH Key">
-        <select
-          className={inputClass}
+        <CustomSelect
           value={form.ssh_key_path || ""}
-          onChange={(e) => setForm({ ...form, ssh_key_path: e.target.value })}
-        >
-          <option value="">Select SSH Key...</option>
-          {sshKeys.map((k) => (
-            <option key={k.name} value={`/config/ssh/${k.name}`}>
-              {k.name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setForm({ ...form, ssh_key_path: val })}
+          placeholder="Select SSH Key..."
+          options={sshKeys.map((k) => ({
+            value: `/config/ssh/${k.name}`,
+            label: k.name,
+          }))}
+        />
       </Field>
       <div className="flex gap-4 pt-1">
         <Toggle

@@ -5,8 +5,6 @@ import {
   Edit3,
   Trash2,
   X,
-  Shield,
-  ShieldOff,
   CheckCircle,
   AlertCircle,
   Key,
@@ -120,24 +118,6 @@ export default function UsersPage() {
     }
   };
 
-  const handleToggleActive = async (user) => {
-    const action = user.is_active ? "deactivate" : "activate";
-    const ok = await confirmDlg({
-      title: `${user.is_active ? "Deactivate" : "Activate"} User?`,
-      message: `${user.is_active ? "Deactivate" : "Activate"} "${user.display_name || user.username}"?${user.is_active ? " They will be logged out." : ""}`,
-      variant: user.is_active ? "warning" : "info",
-      confirmText: user.is_active ? "Deactivate" : "Activate",
-    });
-    if (!ok) return;
-    try {
-      await api.updateUser(user.id, { is_active: !user.is_active });
-      toast.success(`User "${user.display_name || user.username}" ${action}d`);
-      fetchUsers();
-    } catch (e) {
-      toast.error(e.message);
-    }
-  };
-
   const handleResetPassword = async (userId) => {
     if (!newPassword) return;
     try {
@@ -228,11 +208,6 @@ export default function UsersPage() {
                       Admin
                     </span>
                   )}
-                  {!u.is_active && (
-                    <span className="px-2 py-0.5 text-[10px] font-semibold bg-red-500/20 text-red-400 rounded-full">
-                      Disabled
-                    </span>
-                  )}
                 </div>
                 <p className="text-xs text-nfs-muted">@{u.username}</p>
               </div>
@@ -273,25 +248,6 @@ export default function UsersPage() {
                   title="Reset password"
                 >
                   <Key className="w-4 h-4" />
-                </button>
-              )}
-
-              {/* Toggle Active */}
-              {u.id !== currentUser?.id && (
-                <button
-                  onClick={() => handleToggleActive(u)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    u.is_active
-                      ? "text-emerald-400 hover:bg-emerald-500/10"
-                      : "text-red-400 hover:bg-red-500/10"
-                  }`}
-                  title={u.is_active ? "Deactivate" : "Activate"}
-                >
-                  {u.is_active ? (
-                    <Shield className="w-4 h-4" />
-                  ) : (
-                    <ShieldOff className="w-4 h-4" />
-                  )}
                 </button>
               )}
 

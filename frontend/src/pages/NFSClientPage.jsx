@@ -20,6 +20,7 @@ import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
+import CustomSelect from "../components/CustomSelect";
 
 const DEFAULT_MOUNT_OPTIONS =
   "vers=4.2,proto=tcp,hard,nconnect=16,rsize=1048576,wsize=1048576,async,noatime,nocto,ac,actimeo=3600";
@@ -542,18 +543,16 @@ export default function NFSClientPage() {
               />
             </Field>
             <Field label="NFS Version">
-              <select
-                className={inputClass}
+              <CustomSelect
                 value={form.nfs_version}
-                onChange={(e) =>
-                  setForm({ ...form, nfs_version: e.target.value })
-                }
-              >
-                <option value="4.2">4.2 (recommended)</option>
-                <option value="4.1">4.1</option>
-                <option value="4">4.0</option>
-                <option value="3">3</option>
-              </select>
+                onChange={(val) => setForm({ ...form, nfs_version: val })}
+                options={[
+                  { value: "4.2", label: "4.2 (recommended)" },
+                  { value: "4.1", label: "4.1" },
+                  { value: "4", label: "4.0" },
+                  { value: "3", label: "3" },
+                ]}
+              />
             </Field>
           </div>
           <Field label="Remote Path">

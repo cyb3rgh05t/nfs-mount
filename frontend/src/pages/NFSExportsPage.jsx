@@ -22,6 +22,7 @@ import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
+import CustomSelect from "../components/CustomSelect";
 
 const DEFAULT_EXPORT_OPTIONS =
   "rw,async,no_subtree_check,all_squash,anonuid=1000,anongid=1000";
@@ -581,18 +582,16 @@ export default function NFSExportsPage() {
               />
             </Field>
             <Field label="NFS Version">
-              <select
-                className={inputClass}
+              <CustomSelect
                 value={form.nfs_version}
-                onChange={(e) =>
-                  setForm({ ...form, nfs_version: e.target.value })
-                }
-              >
-                <option value="4.2">4.2 (recommended)</option>
-                <option value="4.1">4.1</option>
-                <option value="4">4.0</option>
-                <option value="3">3</option>
-              </select>
+                onChange={(val) => setForm({ ...form, nfs_version: val })}
+                options={[
+                  { value: "4.2", label: "4.2 (recommended)" },
+                  { value: "4.1", label: "4.1" },
+                  { value: "4", label: "4.0" },
+                  { value: "3", label: "3" },
+                ]}
+              />
             </Field>
           </div>
           <Field label="Export Options">

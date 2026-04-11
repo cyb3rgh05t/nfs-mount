@@ -23,6 +23,7 @@ import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
 import Toggle from "../components/Toggle";
+import CustomSelect from "../components/CustomSelect";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -509,23 +510,21 @@ export default function VPNPage() {
 
             {!editing && (
               <Field label="VPN Typ">
-                <select
-                  className={inputClass}
+                <CustomSelect
                   value={form.vpn_type}
-                  onChange={(e) =>
+                  onChange={(val) =>
                     setForm({
                       ...form,
-                      vpn_type: e.target.value,
+                      vpn_type: val,
                       config_content:
-                        e.target.value === "wireguard"
-                          ? WG_TEMPLATE
-                          : OVPN_TEMPLATE,
+                        val === "wireguard" ? WG_TEMPLATE : OVPN_TEMPLATE,
                     })
                   }
-                >
-                  <option value="wireguard">WireGuard</option>
-                  <option value="openvpn">OpenVPN</option>
-                </select>
+                  options={[
+                    { value: "wireguard", label: "WireGuard" },
+                    { value: "openvpn", label: "OpenVPN" },
+                  ]}
+                />
               </Field>
             )}
 

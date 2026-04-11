@@ -347,9 +347,26 @@ export default function SettingsPage() {
     }
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard");
+    } catch {
+      // Fallback for non-HTTPS contexts
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        toast.success("Copied to clipboard");
+      } catch {
+        toast.error("Failed to copy to clipboard");
+      }
+      document.body.removeChild(ta);
+    }
   };
 
   const saveProfile = async () => {
@@ -440,24 +457,6 @@ export default function SettingsPage() {
     try {
       await api.deleteUser(userId);
       toast.success(`User "${u?.display_name || u?.username}" deleted`);
-      fetchData();
-    } catch (e) {
-      toast.error(e.message);
-    }
-  };
-
-  const handleToggleActive = async (u) => {
-    const action = u.is_active ? "deactivate" : "activate";
-    const ok = await confirmDlg({
-      title: `${u.is_active ? "Deactivate" : "Activate"} User?`,
-      message: `${u.is_active ? "Deactivate" : "Activate"} "${u.display_name || u.username}"?${u.is_active ? " They will be logged out." : ""}`,
-      variant: u.is_active ? "warning" : "info",
-      confirmText: u.is_active ? "Deactivate" : "Activate",
-    });
-    if (!ok) return;
-    try {
-      await api.updateUser(u.id, { is_active: !u.is_active });
-      toast.success(`User "${u.display_name || u.username}" ${action}d`);
       fetchData();
     } catch (e) {
       toast.error(e.message);
@@ -851,21 +850,7 @@ export default function SettingsPage() {
                           <Key className="w-4 h-4" />
                         </button>
                       )}
-                      <button
-                        onClick={() => handleToggleActive(u)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          u.is_active
-                            ? "text-emerald-400 hover:bg-emerald-500/10"
-                            : "text-red-400 hover:bg-red-500/10"
-                        }`}
-                        title={u.is_active ? "Deactivate" : "Activate"}
-                      >
-                        {u.is_active ? (
-                          <Shield className="w-4 h-4" />
-                        ) : (
-                          <ShieldOff className="w-4 h-4" />
-                        )}
-                      </button>
+
                       <button
                         onClick={() => openEditUser(u)}
                         className="p-2 rounded-lg text-nfs-muted hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
