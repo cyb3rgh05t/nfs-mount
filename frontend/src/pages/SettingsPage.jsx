@@ -2384,38 +2384,58 @@ export default function SettingsPage() {
                       </code>
                     </p>
                     <div className="flex gap-4">
-                      <div
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                          diagnostics.rps_xps.rps_ok
-                            ? "bg-green-500/5 border-green-500/20"
-                            : "bg-red-500/5 border-red-500/20"
-                        }`}
-                      >
-                        {diagnostics.rps_xps.rps_ok ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <AlertCircle className="w-4 h-4 text-red-400" />
-                        )}
-                        <span className="text-xs font-mono text-white">
-                          RPS: {diagnostics.rps_xps.rps}
-                        </span>
-                      </div>
-                      <div
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                          diagnostics.rps_xps.xps_ok
-                            ? "bg-green-500/5 border-green-500/20"
-                            : "bg-red-500/5 border-red-500/20"
-                        }`}
-                      >
-                        {diagnostics.rps_xps.xps_ok ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <AlertCircle className="w-4 h-4 text-red-400" />
-                        )}
-                        <span className="text-xs font-mono text-white">
-                          XPS: {diagnostics.rps_xps.xps}
-                        </span>
-                      </div>
+                      {diagnostics.rps_xps.rps !== undefined && (
+                        <div
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                            diagnostics.rps_xps.rps_ok === null
+                              ? "bg-nfs-input border-nfs-border"
+                              : diagnostics.rps_xps.rps_ok
+                                ? "bg-green-500/5 border-green-500/20"
+                                : "bg-red-500/5 border-red-500/20"
+                          }`}
+                        >
+                          {diagnostics.rps_xps.rps_ok === null ? (
+                            <Info className="w-4 h-4 text-nfs-muted" />
+                          ) : diagnostics.rps_xps.rps_ok ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                          )}
+                          <span className="text-xs font-mono text-white">
+                            RPS: {diagnostics.rps_xps.rps ?? "N/A"}
+                          </span>
+                        </div>
+                      )}
+                      {diagnostics.rps_xps.xps !== undefined && (
+                        <div
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                            diagnostics.rps_xps.xps_ok === null
+                              ? "bg-nfs-input border-nfs-border"
+                              : diagnostics.rps_xps.xps_ok
+                                ? "bg-green-500/5 border-green-500/20"
+                                : "bg-red-500/5 border-red-500/20"
+                          }`}
+                        >
+                          {diagnostics.rps_xps.xps_ok === null ? (
+                            <Info className="w-4 h-4 text-nfs-muted" />
+                          ) : diagnostics.rps_xps.xps_ok ? (
+                            <CheckCircle className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                          )}
+                          <span className="text-xs font-mono text-white">
+                            XPS: {diagnostics.rps_xps.xps ?? "N/A"}
+                          </span>
+                        </div>
+                      )}
+                      {diagnostics.rps_xps.xps === undefined && (
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-nfs-input border-nfs-border">
+                          <Info className="w-4 h-4 text-nfs-muted" />
+                          <span className="text-xs font-mono text-nfs-muted">
+                            XPS: not supported
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

@@ -626,7 +626,16 @@ async def get_diagnostics() -> dict:
                 # Try reading mergerfs runtime config via xattr for accurate option detection
                 full_opts = opts
                 try:
-                    xr = await _run(["getfattr", "-n", "user.mergerfs.options", "--only-values", mount_point], timeout=5)
+                    xr = await _run(
+                        [
+                            "getfattr",
+                            "-n",
+                            "user.mergerfs.options",
+                            "--only-values",
+                            mount_point,
+                        ],
+                        timeout=5,
+                    )
                     if xr.returncode == 0 and xr.stdout.strip():
                         full_opts = xr.stdout.strip()
                 except Exception:
@@ -739,6 +748,9 @@ async def get_diagnostics() -> dict:
                     "00000000",
                     "00000000,00000000",
                 )
+            else:
+                diag["rps_xps"]["rps"] = None
+                diag["rps_xps"]["rps_ok"] = None
             if os.path.isfile(xps_path):
                 with open(xps_path) as f:
                     xps = f.read().strip()
@@ -748,6 +760,9 @@ async def get_diagnostics() -> dict:
                     "00000000",
                     "00000000,00000000",
                 )
+            else:
+                diag["rps_xps"]["xps"] = None
+                diag["rps_xps"]["xps_ok"] = None
     except Exception:
         pass
 
