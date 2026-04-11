@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Activity,
   Cpu,
@@ -20,6 +20,16 @@ import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import ProgressDialog from "../components/ProgressDialog";
+
+const useAutoScroll = (deps) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, deps);
+  return ref;
+};
 
 function StatCard({ icon: Icon, label, value, sub, color = "nfs-primary" }) {
   const colorMap = {
@@ -81,6 +91,7 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
+  const logsEndRef = useAutoScroll([recentLogs]);
 
   const fetchData = async () => {
     try {
@@ -796,7 +807,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Live Logs */}
-      <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6">
+      <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mt-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-purple-500/10">
@@ -815,7 +826,10 @@ export default function DashboardPage() {
           </button>
         </div>
         <div className="bg-[#0d1117] rounded-lg overflow-hidden">
-          <div className="overflow-auto max-h-[280px] p-3 font-mono text-[11px] leading-relaxed">
+          <div
+            ref={logsEndRef}
+            className="overflow-auto max-h-[420px] p-3 font-mono text-[11px] leading-relaxed"
+          >
             {recentLogs.length === 0 ? (
               <div className="text-center text-nfs-muted py-8">
                 No log entries
