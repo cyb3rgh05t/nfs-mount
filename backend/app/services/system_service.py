@@ -626,19 +626,9 @@ async def get_diagnostics() -> dict:
                 # Try reading mergerfs runtime config via xattr for accurate option detection
                 full_opts = opts
                 try:
-                    xr = await _run(
-                        [
-                            "getfattr",
-                            "-n",
-                            "user.mergerfs.options",
-                            "--only-values",
-                            mount_point,
-                        ],
-                        timeout=5,
-                    )
-                    if xr.returncode == 0 and xr.stdout.strip():
-                        full_opts = xr.stdout.strip()
-                except Exception:
+                    raw = os.getxattr(mount_point, "user.mergerfs.options")
+                    full_opts = raw.decode("utf-8", errors="replace")
+                except (OSError, AttributeError):
                     pass
                 entry = {
                     "device": parts[0],

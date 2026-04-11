@@ -14,6 +14,24 @@ from ..services import firewall_service
 logger = logging.getLogger("nfs-manager.service.nfs")
 
 
+def ensure_read_ahead(min_kb: int = 16384) -> None:
+    """Set read-ahead for all BDI devices below threshold."""
+    try:
+        for bdi in os.listdir("/sys/class/bdi"):
+            ra_path = f"/sys/class/bdi/{bdi}/read_ahead_kb"
+            if os.path.isfile(ra_path):
+                try:
+                    with open(ra_path) as f:
+                        current = f.read().strip()
+                    if int(current) < min_kb:
+                        with open(ra_path, "w") as f:
+                            f.write(str(min_kb))
+                except (ValueError, PermissionError, OSError):
+                    pass
+    except OSError:
+        pass
+
+
 async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess:
     """Run a shell command asynchronously."""
     loop = asyncio.get_event_loop()
@@ -85,21 +103,7 @@ async def mount_nfs(mount: NFSMount) -> dict:
     await firewall_service.apply_client_firewall()
 
     # NFS read-ahead tuning (16MB for smooth 4K streaming)
-    try:
-        for bdi in os.listdir("/sys/class/bdi"):
-            bdi_path = f"/sys/class/bdi/{bdi}"
-            ra_path = f"{bdi_path}/read_ahead_kb"
-            if os.path.isfile(ra_path):
-                try:
-                    with open(ra_path) as f:
-                        current = f.read().strip()
-                    if int(current) < 16384:
-                        with open(ra_path, "w") as f:
-                            f.write("16384")
-                except (ValueError, PermissionError, OSError):
-                    pass
-    except OSError:
-        pass
+    ensure_read_ahead()
 
     logger.info(f"NFS mount successful: {local}")
     return {"success": True, "name": mount.name}

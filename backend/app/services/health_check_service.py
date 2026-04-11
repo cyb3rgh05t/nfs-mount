@@ -23,6 +23,7 @@ from .nfs_service import (
     validate_nfs,
     is_server_reachable,
     mount_nfs,
+    ensure_read_ahead,
 )
 from .mergerfs_service import is_mounted as mergerfs_is_mounted, mount_mergerfs
 from . import nfs_export_service
@@ -160,6 +161,9 @@ async def _check_nfs_mounts() -> None:
             )
 
         _prev_state[key] = healthy
+
+    # Ensure read-ahead is set for all NFS BDI devices every cycle
+    ensure_read_ahead()
 
 
 async def _check_mergerfs_mounts() -> None:
