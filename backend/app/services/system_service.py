@@ -677,7 +677,7 @@ async def get_diagnostics() -> dict:
                         full_opts = raw.decode("utf-8", errors="replace")
                         source_used = "xattr"
                     except (OSError, AttributeError) as xe:
-                            db_opts = mergerfs_db_opts.get(mount_point, "")
+                        db_opts = mergerfs_db_opts.get(mount_point, "")
                         if db_opts:
                             full_opts = db_opts
                             source_used = "database"
