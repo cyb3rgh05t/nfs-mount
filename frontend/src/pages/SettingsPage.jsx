@@ -2096,9 +2096,9 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
             >
               {diagLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin text-nfs-primary" />
               ) : (
-                <Stethoscope className="w-4 h-4" />
+                <Stethoscope className="w-4 h-4 text-nfs-primary" />
               )}
               {diagLoading ? "Scanning..." : "Run Diagnostics"}
             </button>
