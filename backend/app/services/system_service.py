@@ -616,6 +616,7 @@ async def get_diagnostics() -> dict:
     # MergerFS mounts
     # Collect mergerfs process command lines from /proc for accurate option detection
     mergerfs_cmdlines = {}
+    _mergerfs_debug = {"proc_matches": [], "xattr_errors": {}, "source": {}}
     try:
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
@@ -627,8 +628,9 @@ async def get_diagnostics() -> dict:
                 args = raw.decode("utf-8", errors="replace").split("\x00")
                 if not any("mergerfs" in a for a in args[:2]):
                     continue
-                # Parse: mergerfs [-o options] src1:src2 mount_point
-                # or: mergerfs src1:src2 mount_point -o options
+                _mergerfs_debug["proc_matches"].append(
+                    {"pid": pid, "args": [a for a in args if a]}
+                )
                 opt_str = ""
                 mp = ""
                 for i, a in enumerate(args):
@@ -669,18 +671,30 @@ async def get_diagnostics() -> dict:
                 opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
                 mount_point = parts[2]
                 # Priority: /proc cmdline > xattr > DB config > mount output
+                source_used = "mount"
                 full_opts = mergerfs_cmdlines.get(mount_point, "")
-                if not full_opts:
+                if full_opts:
+                    source_used = "proc_cmdline"
+                else:
                     try:
                         raw = os.getxattr(mount_point, "user.mergerfs.options")
                         full_opts = raw.decode("utf-8", errors="replace")
-                    except (OSError, AttributeError):
-                        full_opts = mergerfs_db_opts.get(mount_point, opts)
+                        source_used = "xattr"
+                    except (OSError, AttributeError) as xe:
+                        _mergerfs_debug["xattr_errors"][mount_point] = str(xe)
+                        db_opts = mergerfs_db_opts.get(mount_point, "")
+                        if db_opts:
+                            full_opts = db_opts
+                            source_used = "database"
+                        else:
+                            full_opts = opts
+                _mergerfs_debug["source"][mount_point] = source_used
                 entry = {
                     "device": parts[0],
                     "mount_point": mount_point,
                     "options": opts,
                     "full_options": full_opts,
+                    "options_source": source_used,
                     "checks": {
                         "kernel_cache": "kernel_cache" in full_opts,
                         "splice_move": "splice_move" in full_opts,
@@ -690,6 +704,8 @@ async def get_diagnostics() -> dict:
                     },
                 }
                 diag["mergerfs_mounts"].append(entry)
+
+    diag["_mergerfs_debug"] = _mergerfs_debug
 
     # NFS exports
     try:
