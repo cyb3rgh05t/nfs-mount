@@ -4,7 +4,6 @@ import {
   HardDrive,
   GitMerge,
   Settings,
-  FolderSync,
   Menu,
   X,
   Shield,
@@ -61,7 +60,7 @@ export default function Sidebar() {
     <>
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-6 border-b border-nfs-border">
-        <FolderSync className="w-8 h-8 text-nfs-primary" />
+        <img src="/favicon.svg" alt="NFS Manager" className="w-8 h-8" />
         <div>
           <h1 className="text-lg font-bold text-white">NFS Manager</h1>
           <p className="text-xs text-nfs-muted">MergerFS & UnionFS</p>

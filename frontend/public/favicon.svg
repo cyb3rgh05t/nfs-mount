@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="#030303"/>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="#373737" stroke-width="1"/>
+  <!-- Drive body -->
+  <rect x="12" y="16" width="40" height="32" rx="6" fill="#0a0a0a" stroke="#d8ed18" stroke-width="2"/>
+  <!-- Drive bay lines -->
+  <line x1="18" y1="24" x2="46" y2="24" stroke="#d8ed18" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <line x1="18" y1="30" x2="46" y2="30" stroke="#d8ed18" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+  <!-- Activity LEDs -->
+  <circle cx="20" cy="40" r="2.5" fill="#d8ed18">
+    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="28" cy="40" r="2.5" fill="#d8ed18" opacity="0.35"/>
+  <!-- Connection ports -->
+  <rect x="38" y="37" width="8" height="6" rx="1.5" fill="#d8ed18" opacity="0.25"/>
+  <line x1="40" y1="39" x2="40" y2="41" stroke="#d8ed18" stroke-width="1" stroke-linecap="round"/>
+  <line x1="43" y1="39" x2="43" y2="41" stroke="#d8ed18" stroke-width="1" stroke-linecap="round"/>
+</svg>
