@@ -880,3 +880,254 @@ async def get_diagnostics() -> dict:
         pass
 
     return diag
+
+
+# ---------------------------------------------------------------------------
+# NFS Mount Performance Benchmark
+# ---------------------------------------------------------------------------
+
+
+async def run_benchmark(mount_path: str, file_size_mb: int = 256) -> dict:
+    """Run performance benchmark on an NFS mount point.
+
+    Tests: sequential write, sequential read, latency, metadata ops.
+    Uses dd with direct I/O to bypass local caches and measure real NFS throughput.
+    """
+    import time as _time
+
+    if not os.path.isdir(mount_path):
+        return {"error": f"Path {mount_path} does not exist or is not mounted"}
+
+    test_dir = os.path.join(mount_path, ".nfs-benchmark")
+    test_file = os.path.join(test_dir, "bench.tmp")
+    results = {
+        "mount_path": mount_path,
+        "file_size_mb": file_size_mb,
+        "write": None,
+        "read": None,
+        "latency": None,
+        "metadata": None,
+    }
+
+    try:
+        os.makedirs(test_dir, exist_ok=True)
+    except OSError as e:
+        return {"error": f"Cannot create test directory: {e}"}
+
+    loop = asyncio.get_event_loop()
+    # Dynamic timeout: at least 120s, or ~2s per MB (50MB/s minimum expected)
+    dd_timeout = max(120, file_size_mb // 50 + 60)
+
+    try:
+        # --- Sequential Write ---
+        try:
+            write_cmd = [
+                "dd",
+                "if=/dev/zero",
+                f"of={test_file}",
+                f"bs=1M",
+                f"count={file_size_mb}",
+                "conv=fdatasync",
+                "oflag=direct",
+            ]
+            t0 = _time.monotonic()
+            wr = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    write_cmd, capture_output=True, text=True, timeout=dd_timeout
+                ),
+            )
+            elapsed = _time.monotonic() - t0
+
+            if wr.returncode == 0:
+                speed_mbps = file_size_mb / elapsed if elapsed > 0 else 0
+                results["write"] = {
+                    "speed_mbps": round(speed_mbps, 1),
+                    "elapsed_s": round(elapsed, 2),
+                    "size_mb": file_size_mb,
+                }
+            else:
+                # Try without oflag=direct (some NFS mounts don't support it)
+                write_cmd = [
+                    "dd",
+                    "if=/dev/zero",
+                    f"of={test_file}",
+                    f"bs=1M",
+                    f"count={file_size_mb}",
+                    "conv=fdatasync",
+                ]
+                t0 = _time.monotonic()
+                wr = await loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        write_cmd, capture_output=True, text=True, timeout=dd_timeout
+                    ),
+                )
+                elapsed = _time.monotonic() - t0
+                if wr.returncode == 0:
+                    speed_mbps = file_size_mb / elapsed if elapsed > 0 else 0
+                    results["write"] = {
+                        "speed_mbps": round(speed_mbps, 1),
+                        "elapsed_s": round(elapsed, 2),
+                        "size_mb": file_size_mb,
+                    }
+                else:
+                    results["write"] = {"error": wr.stderr.strip()[:200]}
+        except subprocess.TimeoutExpired:
+            results["write"] = {"error": f"Write test timed out ({dd_timeout}s)"}
+
+        # --- Sequential Read ---
+        if os.path.isfile(test_file):
+            try:
+                # Drop caches before read test
+                try:
+                    with open("/proc/sys/vm/drop_caches", "w") as f:
+                        f.write("3")
+                except (PermissionError, OSError):
+                    pass
+
+                read_cmd = [
+                    "dd",
+                    f"if={test_file}",
+                    "of=/dev/null",
+                    "bs=1M",
+                    "iflag=direct",
+                ]
+                t0 = _time.monotonic()
+                rd = await loop.run_in_executor(
+                    None,
+                    lambda: subprocess.run(
+                        read_cmd, capture_output=True, text=True, timeout=dd_timeout
+                    ),
+                )
+                elapsed = _time.monotonic() - t0
+
+                if rd.returncode == 0:
+                    speed_mbps = file_size_mb / elapsed if elapsed > 0 else 0
+                    results["read"] = {
+                        "speed_mbps": round(speed_mbps, 1),
+                        "elapsed_s": round(elapsed, 2),
+                        "size_mb": file_size_mb,
+                    }
+                else:
+                    # Try without iflag=direct
+                    read_cmd = [
+                        "dd",
+                        f"if={test_file}",
+                        "of=/dev/null",
+                        "bs=1M",
+                    ]
+                    t0 = _time.monotonic()
+                    rd = await loop.run_in_executor(
+                        None,
+                        lambda: subprocess.run(
+                            read_cmd, capture_output=True, text=True, timeout=dd_timeout
+                        ),
+                    )
+                    elapsed = _time.monotonic() - t0
+                    if rd.returncode == 0:
+                        speed_mbps = file_size_mb / elapsed if elapsed > 0 else 0
+                        results["read"] = {
+                            "speed_mbps": round(speed_mbps, 1),
+                            "elapsed_s": round(elapsed, 2),
+                            "size_mb": file_size_mb,
+                        }
+                    else:
+                        results["read"] = {"error": rd.stderr.strip()[:200]}
+            except subprocess.TimeoutExpired:
+                results["read"] = {"error": f"Read test timed out ({dd_timeout}s)"}
+
+        # --- Latency (small file create + sync) ---
+        try:
+            latency_file = os.path.join(test_dir, "latency.tmp")
+            samples = 10
+            times = []
+            for _ in range(samples):
+                t0 = _time.monotonic()
+                await loop.run_in_executor(None, lambda: _write_sync(latency_file))
+                elapsed_ms = (_time.monotonic() - t0) * 1000
+                times.append(elapsed_ms)
+                try:
+                    os.unlink(latency_file)
+                except OSError:
+                    pass
+
+            if times:
+                results["latency"] = {
+                    "avg_ms": round(sum(times) / len(times), 2),
+                    "min_ms": round(min(times), 2),
+                    "max_ms": round(max(times), 2),
+                    "samples": samples,
+                }
+        except Exception as e:
+            results["latency"] = {"error": str(e)[:200]}
+
+        # --- Metadata ops (stat performance) ---
+        try:
+            # Create 100 small files, then stat them all
+            meta_dir = os.path.join(test_dir, "meta")
+            os.makedirs(meta_dir, exist_ok=True)
+            num_files = 100
+
+            # Create
+            t0 = _time.monotonic()
+            for i in range(num_files):
+                p = os.path.join(meta_dir, f"f{i}")
+                with open(p, "w") as f:
+                    f.write("x")
+            create_elapsed = _time.monotonic() - t0
+
+            # Stat
+            t0 = _time.monotonic()
+            for i in range(num_files):
+                os.stat(os.path.join(meta_dir, f"f{i}"))
+            stat_elapsed = _time.monotonic() - t0
+
+            # Cleanup
+            for i in range(num_files):
+                try:
+                    os.unlink(os.path.join(meta_dir, f"f{i}"))
+                except OSError:
+                    pass
+            try:
+                os.rmdir(meta_dir)
+            except OSError:
+                pass
+
+            results["metadata"] = {
+                "create_ops_per_sec": (
+                    round(num_files / create_elapsed, 0) if create_elapsed > 0 else 0
+                ),
+                "stat_ops_per_sec": (
+                    round(num_files / stat_elapsed, 0) if stat_elapsed > 0 else 0
+                ),
+                "num_files": num_files,
+                "create_elapsed_s": round(create_elapsed, 3),
+                "stat_elapsed_s": round(stat_elapsed, 3),
+            }
+        except Exception as e:
+            results["metadata"] = {"error": str(e)[:200]}
+
+    finally:
+        # Cleanup
+        try:
+            if os.path.isfile(test_file):
+                os.unlink(test_file)
+            if os.path.isdir(test_dir):
+                import shutil
+
+                shutil.rmtree(test_dir, ignore_errors=True)
+        except OSError:
+            pass
+
+    return results
+
+
+def _write_sync(path: str) -> None:
+    """Write a small file and sync to measure latency."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        os.write(fd, b"benchmark-latency-test\n")
+        os.fsync(fd)
+    finally:
+        os.close(fd)

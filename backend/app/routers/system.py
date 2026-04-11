@@ -1,7 +1,7 @@
 import logging
 import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import verify_api_key
@@ -90,3 +90,14 @@ async def set_nfs_threads(data: dict):
 @router.get("/diagnostics")
 async def diagnostics():
     return await system_service.get_diagnostics()
+
+
+@router.post("/benchmark")
+async def benchmark(body: dict):
+    mount_path = body.get("mount_path", "")
+    file_size_mb = body.get("file_size_mb", 256)
+    if not mount_path:
+        raise HTTPException(status_code=400, detail="mount_path is required")
+    if file_size_mb < 1 or file_size_mb > 51200:
+        raise HTTPException(status_code=400, detail="file_size_mb must be 1-51200")
+    return await system_service.run_benchmark(mount_path, file_size_mb)

@@ -10,6 +10,7 @@ import {
   Shield,
   Monitor,
   Stethoscope,
+  Gauge,
   User,
   LogOut,
   Download,
@@ -33,6 +34,7 @@ const links = [
   { to: "/vpn", label: "VPN Tunnel", icon: Shield },
   { to: "/monitor", label: "Server Monitor", icon: Monitor },
   { to: "/diagnostics", label: "Diagnostics", icon: Stethoscope },
+  { to: "/benchmark", label: "Benchmark", icon: Gauge },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
