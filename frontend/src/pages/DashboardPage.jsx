@@ -13,6 +13,7 @@ import {
   Plus,
   Download,
   Upload,
+  ScrollText,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
@@ -79,10 +80,11 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [recentLogs, setRecentLogs] = useState([]);
 
   const fetchData = async () => {
     try {
-      const [st, sys, nfs, merger, exports, vpn, kp, rps, fw] =
+      const [st, sys, nfs, merger, exports, vpn, kp, rps, fw, logData] =
         await Promise.all([
           api.getSystemStatus(),
           api.getSystemStats(),
@@ -93,6 +95,7 @@ export default function DashboardPage() {
           api.getKernelParams().catch(() => []),
           api.getRpsXps().catch(() => null),
           api.getFirewallStatus().catch(() => null),
+          api.getLogs(20).catch(() => []),
         ]);
       setStatus(st);
       setStats(sys);
@@ -103,6 +106,7 @@ export default function DashboardPage() {
       setKernelParams(kp);
       setRpsXps(rps);
       setFirewallStatus(fw);
+      setRecentLogs(logData);
       setError("");
     } catch (e) {
       setError(e.message);
@@ -790,6 +794,55 @@ export default function DashboardPage() {
           })()}
         </div>
       </div>
+
+      {/* Live Logs */}
+      <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-500/10">
+              <ScrollText className="w-4 h-4 text-purple-400" />
+            </div>
+            <h2 className="text-lg font-semibold text-white">Recent Logs</h2>
+            <span className="text-xs text-nfs-muted">Last {recentLogs.length} entries</span>
+          </div>
+          <button
+            onClick={() => navigate("/logs")}
+            className="text-sm text-nfs-primary hover:text-nfs-primary/80 transition-colors"
+          >
+            View All →
+          </button>
+        </div>
+        <div className="bg-[#0d1117] rounded-lg overflow-hidden">
+          <div className="overflow-auto max-h-[280px] p-3 font-mono text-[11px] leading-relaxed">
+            {recentLogs.length === 0 ? (
+              <div className="text-center text-nfs-muted py-8">No log entries</div>
+            ) : (
+              recentLogs.map((entry, i) => (
+                <div key={i} className="flex gap-2 py-0.5 hover:bg-white/[0.02]">
+                  <span className="text-nfs-muted/50 shrink-0 w-[52px]">
+                    {entry.timestamp ? entry.timestamp.split(" ")[1] || "" : ""}
+                  </span>
+                  <span
+                    className={`shrink-0 w-[60px] text-center rounded px-0.5 ${
+                      entry.level === "ERROR" || entry.level === "CRITICAL"
+                        ? "text-red-400 bg-red-400/10"
+                        : entry.level === "WARNING"
+                          ? "text-yellow-400 bg-yellow-400/10"
+                          : entry.level === "INFO"
+                            ? "text-emerald-400 bg-emerald-400/10"
+                            : "text-cyan-400 bg-cyan-400/10"
+                    }`}
+                  >
+                    {entry.level}
+                  </span>
+                  <span className="text-slate-300 truncate">{entry.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       <ProgressDialog progress={progress} />
     </div>
   );

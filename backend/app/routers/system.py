@@ -66,8 +66,11 @@ async def apply_rps_xps(data: dict, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/logs")
-async def get_logs(lines: int = Query(100, ge=1, le=1000)):
-    return system_service.get_logs(lines)
+async def get_logs(
+    lines: int = Query(100, ge=1, le=5000),
+    level: str | None = Query(None),
+):
+    return system_service.get_logs(lines, level)
 
 
 @router.get("/docker-info")

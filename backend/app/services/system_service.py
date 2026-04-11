@@ -257,24 +257,53 @@ async def apply_kernel_tuning(
     return results
 
 
-def get_logs(lines: int = 100) -> list[dict]:
-    """Read last N lines from the log file."""
-    log_file = "/var/log/nfs-manager/nfs-manager.log"
-    entries = []
+def get_logs(lines: int = 100, level: str | None = None) -> list[dict]:
+    """Read last N lines from the log file with proper parsing."""
+    log_file = "/data/logs/nfs-manager.log"
+    entries: list[dict] = []
     if not os.path.isfile(log_file):
         return entries
 
     try:
         with open(log_file, "r") as f:
             all_lines = f.readlines()
-            for line in all_lines[-lines:]:
-                line = line.strip()
-                if not line:
-                    continue
-                entries.append({"timestamp": "", "level": "INFO", "message": line})
+
+        # Parse structured log lines: "2025-04-11 10:30:00 | INFO     | logger.name | message"
+        for raw in all_lines:
+            raw = raw.strip()
+            if not raw:
+                continue
+            parts = raw.split(" | ", 3)
+            if len(parts) >= 4:
+                timestamp = parts[0].strip()
+                entry_level = parts[1].strip()
+                source = parts[2].strip()
+                message = parts[3].strip()
+            elif len(parts) == 3:
+                timestamp = parts[0].strip()
+                entry_level = parts[1].strip()
+                source = ""
+                message = parts[2].strip()
+            else:
+                timestamp = ""
+                entry_level = "INFO"
+                source = ""
+                message = raw
+
+            if level and entry_level != level.upper():
+                continue
+
+            entries.append({
+                "timestamp": timestamp,
+                "level": entry_level,
+                "source": source,
+                "message": message,
+            })
+
+        # Return last N entries
+        return entries[-lines:]
     except Exception:
-        pass
-    return entries
+        return entries
 
 
 def count_active_mounts(mount_type: str = "nfs") -> int:
@@ -731,7 +760,7 @@ async def get_diagnostics() -> dict:
                     source_used = "proc_cmdline"
                 else:
                     try:
-                        raw = os.getxattr(mount_point, "user.mergerfs.options")
+                        raw = os.getxattr(mount_point, "user.mergerfs.options")  # type: ignore[attr-defined]
                         full_opts = raw.decode("utf-8", errors="replace")
                         source_used = "xattr"
                     except (OSError, AttributeError) as xe:

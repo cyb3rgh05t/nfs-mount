@@ -130,7 +130,11 @@ const api = {
     request("POST", "/system/kernel-tuning", { params }),
   getRpsXps: () => request("GET", "/system/rps-xps"),
   applyRpsXps: (settings) => request("POST", "/system/rps-xps", settings),
-  getLogs: (lines = 100) => request("GET", `/system/logs?lines=${lines}`),
+  getLogs: (lines = 100, level = null) => {
+    let url = `/system/logs?lines=${lines}`;
+    if (level) url += `&level=${level}`;
+    return request("GET", url);
+  },
   getDockerInfo: () => request("GET", "/system/docker-info"),
   getNfsThreads: () => request("GET", "/system/nfs-threads"),
   setNfsThreads: (threads) =>

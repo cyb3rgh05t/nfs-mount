@@ -9,6 +9,7 @@ import MergerFSPage from "./pages/MergerFSPage";
 import SettingsPage from "./pages/SettingsPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
+import LogsPage from "./pages/LogsPage";
 import VPNPage from "./pages/VPNPage";
 import ServerMonitorPage from "./pages/ServerMonitorPage";
 
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/monitor" element={<ServerMonitorPage />} />
                 <Route path="/diagnostics" element={<DiagnosticsPage />} />
                 <Route path="/benchmark" element={<BenchmarkPage />} />
+                <Route path="/logs" element={<LogsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </Layout>

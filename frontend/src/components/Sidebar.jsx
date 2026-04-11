@@ -10,6 +10,7 @@ import {
   Monitor,
   Stethoscope,
   Gauge,
+  ScrollText,
   User,
   LogOut,
   Download,
@@ -34,6 +35,7 @@ const links = [
   { to: "/monitor", label: "Server Monitor", icon: Monitor },
   { to: "/diagnostics", label: "Diagnostics", icon: Stethoscope },
   { to: "/benchmark", label: "Benchmark", icon: Gauge },
+  { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
