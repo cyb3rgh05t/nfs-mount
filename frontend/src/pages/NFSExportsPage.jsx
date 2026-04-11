@@ -103,7 +103,7 @@ export default function NFSExportsPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -307,12 +307,22 @@ export default function NFSExportsPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              setProgress({ message: "Refreshing NFS exports...", status: "loading" });
+              setProgress({
+                message: "Refreshing NFS exports...",
+                status: "loading",
+              });
               try {
                 await fetchData();
-                setProgress({ message: "NFS exports refreshed", status: "success" });
+                setProgress({
+                  message: "NFS exports refreshed",
+                  status: "success",
+                });
               } catch (e) {
-                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+                setProgress({
+                  message: "Refresh failed",
+                  status: "error",
+                  detail: e.message,
+                });
               }
               setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);

@@ -111,7 +111,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -156,12 +156,22 @@ export default function DashboardPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              setProgress({ message: "Refreshing dashboard...", status: "loading" });
+              setProgress({
+                message: "Refreshing dashboard...",
+                status: "loading",
+              });
               try {
                 await fetchData();
-                setProgress({ message: "Dashboard refreshed", status: "success" });
+                setProgress({
+                  message: "Dashboard refreshed",
+                  status: "success",
+                });
               } catch (e) {
-                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+                setProgress({
+                  message: "Refresh failed",
+                  status: "error",
+                  detail: e.message,
+                });
               }
               setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);

@@ -32,7 +32,7 @@ from .notification_service import send_alert
 logger = logging.getLogger("nfs-manager.service.health")
 
 # Check interval in seconds
-CHECK_INTERVAL = 60
+CHECK_INTERVAL = 120
 
 # Persist state across restarts
 _STATE_FILE = Path("/data/health_state.json")

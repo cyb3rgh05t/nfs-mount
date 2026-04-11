@@ -3,14 +3,65 @@ import glob
 import os
 import subprocess
 import logging
+import threading
 
 import psutil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.system_setting import SystemSetting
+from .cache import cached
 
 logger = logging.getLogger("nfs-manager.service.system")
+
+# Background CPU sampler — updates every 2s, never blocks a request
+_cpu_percent: float = 0.0
+_cpu_lock = threading.Lock()
+
+
+def _cpu_sampler() -> None:
+    """Background thread that samples CPU usage every 2 seconds."""
+    global _cpu_percent
+    # Prime the counter (first call always returns 0.0)
+    psutil.cpu_percent(interval=None)
+    import time
+
+    while True:
+        time.sleep(2)
+        val = psutil.cpu_percent(interval=None)
+        with _cpu_lock:
+            _cpu_percent = val
+
+
+# Start background sampler once on import
+_cpu_thread = threading.Thread(target=_cpu_sampler, daemon=True, name="cpu-sampler")
+_cpu_thread.start()
+
+
+def _get_cpu() -> float:
+    with _cpu_lock:
+        return _cpu_percent
+
+
+# Filesystem types to exclude from disk stats (network, virtual, pseudo)
+_REMOTE_FSTYPES = frozenset(
+    {
+        "nfs",
+        "nfs4",
+        "cifs",
+        "smb",
+        "smbfs",
+        "fuse.mergerfs",
+        "fuse.sshfs",
+        "fuse.rclone",
+        "fuse",
+        "9p",
+        "afs",
+        "ncpfs",
+        "lustre",
+        "glusterfs",
+    }
+)
 
 
 async def _run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess:
@@ -29,18 +80,25 @@ async def _run(cmd: list[str], timeout: int = 10) -> subprocess.CompletedProcess
 
 
 def get_system_stats() -> dict:
-    """Get current system resource statistics."""
+    """Get current system resource statistics (cached 5s)."""
+    return cached("system_stats", 5.0, _compute_system_stats)
+
+
+def _compute_system_stats() -> dict:
+    """Actually compute system stats."""
     mem = psutil.virtual_memory()
 
     try:
         load = list(os.getloadavg())  # type: ignore[attr-defined]
     except (AttributeError, OSError):
-        # os.getloadavg() not available on Windows
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu = _get_cpu()
         load = [cpu, cpu, cpu]
 
     disks = []
     for part in psutil.disk_partitions():
+        # Skip remote/virtual filesystems
+        if part.fstype.lower() in _REMOTE_FSTYPES:
+            continue
         try:
             usage = psutil.disk_usage(part.mountpoint)
             disks.append(
@@ -60,7 +118,7 @@ def get_system_stats() -> dict:
     net = psutil.net_io_counters()
 
     return {
-        "cpu_percent": psutil.cpu_percent(interval=0.5),
+        "cpu_percent": _get_cpu(),
         "memory_total": mem.total,
         "memory_used": mem.used,
         "memory_percent": mem.percent,

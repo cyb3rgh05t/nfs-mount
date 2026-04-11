@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import async_session
 from ..models.nfs_mount import NFSMount
 from ..services import firewall_service
+from .cache import cached, invalidate_prefix
 
 logger = logging.getLogger("nfs-manager.service.nfs")
 
@@ -49,7 +50,12 @@ async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess
 
 
 def is_mounted(path: str) -> bool:
-    """Check if a path is a mountpoint."""
+    """Check if a path is a mountpoint (cached 15s)."""
+    return cached(f"nfs_mounted:{path}", 15.0, lambda: _check_mounted(path))
+
+
+def _check_mounted(path: str) -> bool:
+    """Actually check if a path is a mountpoint."""
     try:
         result = subprocess.run(
             ["mountpoint", "-q", path], capture_output=True, timeout=5
@@ -60,7 +66,12 @@ def is_mounted(path: str) -> bool:
 
 
 def is_server_reachable(ip: str) -> bool:
-    """Quick ping check."""
+    """Quick ping check (cached 30s)."""
+    return cached(f"nfs_ping:{ip}", 30.0, lambda: _check_reachable(ip))
+
+
+def _check_reachable(ip: str) -> bool:
+    """Actually ping a server."""
     try:
         result = subprocess.run(
             ["ping", "-c", "1", "-W", "2", ip], capture_output=True, timeout=5
@@ -99,6 +110,10 @@ async def mount_nfs(mount: NFSMount) -> dict:
         logger.error(f"NFS mount failed: {result.stderr}")
         return {"success": False, "error": result.stderr.strip(), "name": mount.name}
 
+    # Invalidate cached status for this mount
+    invalidate_prefix(f"nfs_mounted:{local}")
+    invalidate_prefix(f"nfs_ping:{mount.server_ip}")
+
     # Update client firewall to allow traffic to this server
     await firewall_service.apply_client_firewall()
 
@@ -111,12 +126,15 @@ async def mount_nfs(mount: NFSMount) -> dict:
 
 async def unmount_nfs(local_path: str) -> dict:
     """Unmount an NFS share."""
-    if not is_mounted(local_path):
+    if not _check_mounted(local_path):
         return {"success": True, "message": "Not mounted"}
 
     result = await _run(["umount", "-l", local_path])
     if result.returncode != 0:
         return {"success": False, "error": result.stderr.strip()}
+
+    # Invalidate cached status
+    invalidate_prefix(f"nfs_mounted:{local_path}")
 
     # Update client firewall (may remove server if no other mount uses it)
     await firewall_service.apply_client_firewall()

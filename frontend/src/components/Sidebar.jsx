@@ -9,6 +9,7 @@ import {
   X,
   Shield,
   Monitor,
+  Stethoscope,
   User,
   LogOut,
   Download,
@@ -31,6 +32,7 @@ const links = [
   { to: "/mergerfs", label: "MergerFS", icon: GitMerge },
   { to: "/vpn", label: "VPN Tunnel", icon: Shield },
   { to: "/monitor", label: "Server Monitor", icon: Monitor },
+  { to: "/diagnostics", label: "Diagnostics", icon: Stethoscope },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

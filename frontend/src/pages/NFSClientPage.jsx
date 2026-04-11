@@ -97,7 +97,7 @@ export default function NFSClientPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -309,12 +309,22 @@ export default function NFSClientPage() {
           <button
             onClick={async () => {
               setRefreshing(true);
-              setProgress({ message: "Refreshing NFS mounts...", status: "loading" });
+              setProgress({
+                message: "Refreshing NFS mounts...",
+                status: "loading",
+              });
               try {
                 await fetchData();
-                setProgress({ message: "NFS mounts refreshed", status: "success" });
+                setProgress({
+                  message: "NFS mounts refreshed",
+                  status: "success",
+                });
               } catch (e) {
-                setProgress({ message: "Refresh failed", status: "error", detail: e.message });
+                setProgress({
+                  message: "Refresh failed",
+                  status: "error",
+                  detail: e.message,
+                });
               }
               setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);

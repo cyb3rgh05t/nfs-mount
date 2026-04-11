@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import async_session
 from ..models.mergerfs_config import MergerFSConfig
+from .cache import cached, invalidate_prefix
 
 logger = logging.getLogger("nfs-manager.service.mergerfs")
 
@@ -30,7 +31,12 @@ async def _run(cmd: list[str], timeout: int = 30) -> subprocess.CompletedProcess
 
 
 def is_mounted(path: str) -> bool:
-    """Check if a path is a mountpoint."""
+    """Check if a path is a mountpoint (cached 15s)."""
+    return cached(f"mergerfs_mounted:{path}", 15.0, lambda: _check_mounted(path))
+
+
+def _check_mounted(path: str) -> bool:
+    """Actually check if a path is a mountpoint."""
     try:
         result = subprocess.run(
             ["mountpoint", "-q", path], capture_output=True, timeout=5
@@ -80,13 +86,16 @@ async def mount_mergerfs(config: MergerFSConfig) -> dict:
         logger.error(f"MergerFS mount failed: {result.stderr}")
         return {"success": False, "error": result.stderr.strip(), "name": config.name}
 
+    # Invalidate cached status
+    invalidate_prefix(f"mergerfs_mounted:{mount_point}")
+
     logger.info(f"MergerFS mount successful: {mount_point}")
     return {"success": True, "name": config.name}
 
 
 async def unmount_mergerfs(mount_point: str) -> dict:
     """Unmount a MergerFS union."""
-    if not is_mounted(mount_point):
+    if not _check_mounted(mount_point):
         return {"success": True, "message": "Not mounted"}
 
     result = await _run(["fusermount", "-u", mount_point])
@@ -94,6 +103,10 @@ async def unmount_mergerfs(mount_point: str) -> dict:
         result = await _run(["umount", "-l", mount_point])
         if result.returncode != 0:
             return {"success": False, "error": result.stderr.strip()}
+
+    # Invalidate cached status
+    invalidate_prefix(f"mergerfs_mounted:{mount_point}")
+
     return {"success": True}
 
 
