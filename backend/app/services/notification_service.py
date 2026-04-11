@@ -4,6 +4,8 @@ import socket
 from dataclasses import dataclass
 from datetime import datetime
 
+import re
+
 import httpx
 
 from ..config import settings
@@ -156,6 +158,9 @@ async def send_telegram(
     now = datetime.now().strftime("%H:%M:%S | %d.%m.%Y")
     server_name = _get_server_name()
 
+    # Convert markdown **bold** to HTML <b>bold</b> for Telegram
+    html_message = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", message)
+
     detail_lines = ""
     if details:
         detail_lines = "\n".join(
@@ -168,7 +173,7 @@ async def send_telegram(
         f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
         f"<b>Status:</b> <code>{status}</code>\n"
         f"<b>Server:</b> <code>{server_name}</code>\n\n"
-        f"<b>Meldung:</b>\n<i>{message}</i>\n"
+        f"<b>Meldung:</b>\n<i>{html_message}</i>\n"
         f"{detail_lines}\n"
         f"<code>{now}</code>"
     )
