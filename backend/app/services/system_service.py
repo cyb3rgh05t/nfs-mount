@@ -598,6 +598,7 @@ async def get_diagnostics() -> dict:
             parts = line.split()
             if len(parts) >= 6:
                 opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
+                opts_list = opts.split(",")
                 entry = {
                     "device": parts[0],
                     "mount_point": parts[2],
@@ -606,7 +607,7 @@ async def get_diagnostics() -> dict:
                         "nconnect": "nconnect=" in opts,
                         "rsize": "rsize=" in opts,
                         "wsize": "wsize=" in opts,
-                        "async": "async" in opts.split(","),
+                        "async": "sync" not in opts_list,
                         "noatime": "noatime" in opts,
                     },
                 }
@@ -621,16 +622,25 @@ async def get_diagnostics() -> dict:
             parts = line.split()
             if len(parts) >= 6:
                 opts = line.split("(")[-1].rstrip(")") if "(" in line else ""
+                mount_point = parts[2]
+                # Try reading mergerfs runtime config via xattr for accurate option detection
+                full_opts = opts
+                try:
+                    xr = await _run(["getfattr", "-n", "user.mergerfs.options", "--only-values", mount_point], timeout=5)
+                    if xr.returncode == 0 and xr.stdout.strip():
+                        full_opts = xr.stdout.strip()
+                except Exception:
+                    pass
                 entry = {
                     "device": parts[0],
-                    "mount_point": parts[2],
+                    "mount_point": mount_point,
                     "options": opts,
                     "checks": {
-                        "kernel_cache": "kernel_cache" in opts,
-                        "splice_move": "splice_move" in opts,
-                        "splice_read": "splice_read" in opts,
-                        "direct_io": "direct_io" in opts,
-                        "dropcacheonclose": "dropcacheonclose" in opts,
+                        "kernel_cache": "kernel_cache" in full_opts,
+                        "splice_move": "splice_move" in full_opts,
+                        "splice_read": "splice_read" in full_opts,
+                        "direct_io": "direct_io" in full_opts,
+                        "dropcacheonclose": "dropcacheonclose" in full_opts,
                     },
                 }
                 diag["mergerfs_mounts"].append(entry)
