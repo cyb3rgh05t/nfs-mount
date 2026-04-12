@@ -174,6 +174,25 @@ async def mount_all(db: AsyncSession = Depends(get_db)):
     for m in mounts:
         r = await nfs_service.mount_nfs(m)
         results.append(r)
+    succeeded = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+    details = {
+        "Total": str(len(results)),
+        "Succeeded": str(len(succeeded)),
+        "Failed": str(len(failed)),
+    }
+    if failed:
+        fail_names = ", ".join(r.get("name", "?") for r in failed)
+        details["Failed Mounts"] = fail_names
+        await send_alert(
+            "WARNING",
+            f"NFS Mount All: {len(succeeded)}/{len(results)} succeeded",
+            details,
+        )
+    else:
+        await send_alert(
+            "SUCCESS", f"NFS Mount All: all {len(succeeded)} mounts successful", details
+        )
     return results
 
 
@@ -186,6 +205,25 @@ async def unmount_all(db: AsyncSession = Depends(get_db)):
     for m in mounts:
         r = await nfs_service.unmount_nfs(m.local_path)
         results.append({"name": m.name, **r})
+    succeeded = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+    details = {
+        "Total": str(len(results)),
+        "Succeeded": str(len(succeeded)),
+        "Failed": str(len(failed)),
+    }
+    if failed:
+        fail_names = ", ".join(r.get("name", "?") for r in failed)
+        details["Failed Mounts"] = fail_names
+        await send_alert(
+            "WARNING",
+            f"NFS Unmount All: {len(succeeded)}/{len(results)} succeeded",
+            details,
+        )
+    else:
+        await send_alert(
+            "INFO", f"NFS Unmount All: all {len(succeeded)} mounts unmounted", details
+        )
     return results
 
 

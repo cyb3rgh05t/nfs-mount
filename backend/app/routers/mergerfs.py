@@ -196,6 +196,27 @@ async def mount_all(db: AsyncSession = Depends(get_db)):
     for c in configs:
         r = await mergerfs_service.mount_mergerfs(c)
         results.append(r)
+    succeeded = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+    details = {
+        "Total": str(len(results)),
+        "Succeeded": str(len(succeeded)),
+        "Failed": str(len(failed)),
+    }
+    if failed:
+        fail_names = ", ".join(r.get("name", "?") for r in failed)
+        details["Failed Configs"] = fail_names
+        await send_alert(
+            "WARNING",
+            f"MergerFS Mount All: {len(succeeded)}/{len(results)} succeeded",
+            details,
+        )
+    else:
+        await send_alert(
+            "SUCCESS",
+            f"MergerFS Mount All: all {len(succeeded)} configs mounted",
+            details,
+        )
     return results
 
 
@@ -208,4 +229,25 @@ async def unmount_all(db: AsyncSession = Depends(get_db)):
     for c in configs:
         r = await mergerfs_service.unmount_mergerfs(c.mount_point)
         results.append({"name": c.name, **r})
+    succeeded = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+    details = {
+        "Total": str(len(results)),
+        "Succeeded": str(len(succeeded)),
+        "Failed": str(len(failed)),
+    }
+    if failed:
+        fail_names = ", ".join(r.get("name", "?") for r in failed)
+        details["Failed Configs"] = fail_names
+        await send_alert(
+            "WARNING",
+            f"MergerFS Unmount All: {len(succeeded)}/{len(results)} succeeded",
+            details,
+        )
+    else:
+        await send_alert(
+            "INFO",
+            f"MergerFS Unmount All: all {len(succeeded)} configs unmounted",
+            details,
+        )
     return results
