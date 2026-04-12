@@ -782,8 +782,8 @@ async def get_diagnostics() -> dict:
                         "kernel_cache": "kernel_cache" in full_opts,
                         "splice_move": "splice_move" in full_opts,
                         "splice_read": "splice_read" in full_opts,
-                        "direct_io": "direct_io" in full_opts,
                         "dropcacheonclose": "dropcacheonclose" in full_opts,
+                        "no_direct_io": "direct_io" not in full_opts,
                     },
                 }
                 diag["mergerfs_mounts"].append(entry)

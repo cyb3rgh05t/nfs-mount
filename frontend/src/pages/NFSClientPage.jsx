@@ -23,7 +23,7 @@ import ProgressDialog from "../components/ProgressDialog";
 import CustomSelect from "../components/CustomSelect";
 
 const DEFAULT_MOUNT_OPTIONS =
-  "vers=4.2,proto=tcp,hard,nconnect=16,rsize=1048576,wsize=1048576,async,noatime,nocto,ac,actimeo=3600";
+  "rw,nfsvers=4.2,rsize=1048576,wsize=1048576,hard,proto=tcp,nconnect=16,timeo=600,retrans=2,noatime,async";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -278,6 +278,45 @@ export default function NFSClientPage() {
     setTimeout(() => setProgress(null), 1500);
   };
 
+  const handleUnmountAll = async () => {
+    const ok = await confirm({
+      title: "Unmount All NFS?",
+      message:
+        "This will unmount all NFS shares. Active connections will be interrupted.",
+      variant: "warning",
+      confirmText: "Unmount All",
+    });
+    if (!ok) return;
+    setLoading("unmount-all");
+    setProgress({ message: "Unmounting all NFS shares...", status: "loading" });
+    try {
+      const results = await api.unmountAllNFS();
+      const succeeded = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success).length;
+      if (fail > 0) {
+        setProgress({
+          message: `Unmounted ${succeeded}/${results.length}`,
+          status: "error",
+          detail: `${fail} failed`,
+        });
+      } else {
+        setProgress({
+          message: `All ${succeeded} NFS mounts unmounted`,
+          status: "success",
+        });
+      }
+      fetchData();
+    } catch (e) {
+      setProgress({
+        message: "Unmount all failed",
+        status: "error",
+        detail: e.message,
+      });
+    }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -299,6 +338,18 @@ export default function NFSClientPage() {
               <Zap className="w-4 h-4 text-nfs-primary" />
             )}
             Mount All
+          </button>
+          <button
+            onClick={handleUnmountAll}
+            disabled={loading === "unmount-all"}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-amber-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+          >
+            {loading === "unmount-all" ? (
+              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+            ) : (
+              <Square className="w-4 h-4 text-amber-400" />
+            )}
+            Unmount All
           </button>
           <button
             onClick={openCreate}
@@ -355,8 +406,8 @@ export default function NFSClientPage() {
       {/* NFS Options Info */}
       <InfoBox type="primary" className="mb-6">
         <strong>Streaming-Optimized:</strong> NFSv4.2 with nconnect=16 (16
-        parallel TCP connections), 1MB R/W Buffer, Attribute-Caching (1h),
-        nocto, noatime — optimized for 300+ simultaneous streams.
+        parallel TCP connections), 1MB R/W Buffer, noatime, async — optimized
+        for 300+ simultaneous streams.
       </InfoBox>
 
       {mounts.length === 0 ? (

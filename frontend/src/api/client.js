@@ -109,6 +109,8 @@ const api = {
   mountMergerFS: (id) => request("POST", `/mergerfs/configs/${id}/mount`),
   unmountMergerFS: (id) => request("POST", `/mergerfs/configs/${id}/unmount`),
   getMergerFSStatus: () => request("GET", "/mergerfs/status"),
+  mountAllMergerFS: () => request("POST", "/mergerfs/mount-all"),
+  unmountAllMergerFS: () => request("POST", "/mergerfs/unmount-all"),
 
   // VPN
   getVPNConfigs: () => request("GET", "/vpn/configs"),

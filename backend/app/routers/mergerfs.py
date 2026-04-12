@@ -183,3 +183,29 @@ async def get_all_statuses(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(MergerFSConfig))
     configs = result.scalars().all()
     return [await mergerfs_service.get_mount_status(c) for c in configs]
+
+
+@router.post("/mount-all")
+async def mount_all(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(MergerFSConfig).where(MergerFSConfig.enabled == True)  # noqa: E712
+    )
+    configs = result.scalars().all()
+    logger.info("Mount-all requested for %d enabled MergerFS configs", len(configs))
+    results = []
+    for c in configs:
+        r = await mergerfs_service.mount_mergerfs(c)
+        results.append(r)
+    return results
+
+
+@router.post("/unmount-all")
+async def unmount_all(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(MergerFSConfig))
+    configs = result.scalars().all()
+    logger.info("Unmount-all requested for %d MergerFS configs", len(configs))
+    results = []
+    for c in configs:
+        r = await mergerfs_service.unmount_mergerfs(c.mount_point)
+        results.append({"name": c.name, **r})
+    return results

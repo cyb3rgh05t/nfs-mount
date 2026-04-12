@@ -7,6 +7,7 @@ import {
   Trash2,
   Edit3,
   X,
+  Zap,
   RefreshCw,
   Save,
   Loader2,
@@ -20,7 +21,7 @@ import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
 
 const DEFAULT_OPTIONS =
-  "rw,use_ino,allow_other,statfs_ignore=nc,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,dropcacheonclose=true,kernel_cache,splice_move,splice_read,direct_io,fsname=mergerfs";
+  "rw,use_ino,allow_other,statfs_ignore=nc,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,cache.entry=60,cache.negative_entry=60,cache.attr=60,cache.statfs=60,dropcacheonclose=true,kernel_cache,splice_move,splice_read,fsname=mergerfs";
 
 function Modal({ title, onClose, children }) {
   return (
@@ -238,6 +239,89 @@ export default function MergerFSPage() {
     setTimeout(() => setProgress(null), 1500);
   };
 
+  const handleMountAll = async () => {
+    const ok = await confirm({
+      title: "Mount All MergerFS?",
+      message: "This will mount all enabled MergerFS configs.",
+      variant: "info",
+      confirmText: "Mount All",
+    });
+    if (!ok) return;
+    setLoading("mount-all");
+    setProgress({
+      message: "Mounting all MergerFS configs...",
+      status: "loading",
+    });
+    try {
+      const results = await api.mountAllMergerFS();
+      const succeeded = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success).length;
+      if (fail > 0) {
+        setProgress({
+          message: `Mounted ${succeeded}/${results.length}`,
+          status: "error",
+          detail: `${fail} failed`,
+        });
+      } else {
+        setProgress({
+          message: `All ${succeeded} MergerFS configs mounted`,
+          status: "success",
+        });
+      }
+      fetchData();
+    } catch (e) {
+      setProgress({
+        message: "Mount all failed",
+        status: "error",
+        detail: e.message,
+      });
+    }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
+  };
+
+  const handleUnmountAll = async () => {
+    const ok = await confirm({
+      title: "Unmount All MergerFS?",
+      message:
+        "This will unmount all MergerFS configs. Active connections will be interrupted.",
+      variant: "warning",
+      confirmText: "Unmount All",
+    });
+    if (!ok) return;
+    setLoading("unmount-all");
+    setProgress({
+      message: "Unmounting all MergerFS configs...",
+      status: "loading",
+    });
+    try {
+      const results = await api.unmountAllMergerFS();
+      const succeeded = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success).length;
+      if (fail > 0) {
+        setProgress({
+          message: `Unmounted ${succeeded}/${results.length}`,
+          status: "error",
+          detail: `${fail} failed`,
+        });
+      } else {
+        setProgress({
+          message: `All ${succeeded} MergerFS configs unmounted`,
+          status: "success",
+        });
+      }
+      fetchData();
+    } catch (e) {
+      setProgress({
+        message: "Unmount all failed",
+        status: "error",
+        detail: e.message,
+      });
+    }
+    setLoading("");
+    setTimeout(() => setProgress(null), 1500);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -248,6 +332,30 @@ export default function MergerFSPage() {
           MergerFS
         </h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleMountAll}
+            disabled={loading === "mount-all"}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+          >
+            {loading === "mount-all" ? (
+              <Loader2 className="w-4 h-4 text-nfs-primary animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4 text-nfs-primary" />
+            )}
+            Mount All
+          </button>
+          <button
+            onClick={handleUnmountAll}
+            disabled={loading === "unmount-all"}
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-amber-500 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+          >
+            {loading === "unmount-all" ? (
+              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+            ) : (
+              <Square className="w-4 h-4 text-amber-400" />
+            )}
+            Unmount All
+          </button>
           <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
