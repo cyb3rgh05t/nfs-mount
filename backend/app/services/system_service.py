@@ -1170,12 +1170,12 @@ def _write_sync(path: str) -> None:
 
 
 async def get_health_check() -> dict:
-    """Run comprehensive server health check — live system status."""
+    """Run comprehensive server health check — live system status (parallelized)."""
     import json as _json
 
     hc: dict = {}
 
-    # ── System Overview ──────────────────────────────────────────────────
+    # ── Instant reads (no subprocess, no blocking) ───────────────────────
     mem = psutil.virtual_memory()
     swap = psutil.swap_memory()
     try:
@@ -1192,7 +1192,7 @@ async def get_health_check() -> dict:
         "cpu_percent": _get_cpu(),
     }
 
-    # buff/cache: try /proc/meminfo first (Linux), fallback to psutil attrs
+    # buff/cache
     buff_cache = 0
     try:
         buffers = getattr(mem, "buffers", 0) or 0
@@ -1213,42 +1213,20 @@ async def get_health_check() -> dict:
         "swap_free": swap.free,
         "swap_percent": swap.percent,
     }
-    # Recalculate buff/cache more reliably
     try:
         with open("/proc/meminfo") as f:
             mi = {}
             for line in f:
                 parts = line.split()
                 if len(parts) >= 2:
-                    mi[parts[0].rstrip(":")] = int(parts[1]) * 1024  # kB -> bytes
+                    mi[parts[0].rstrip(":")] = int(parts[1]) * 1024
         hc["memory"]["buff_cache"] = mi.get("Buffers", 0) + mi.get("Cached", 0)
         hc["memory"]["free"] = mi.get("MemFree", 0)
         hc["memory"]["available"] = mi.get("MemAvailable", mem.available)
     except Exception:
         pass
 
-    # ── vmstat snapshot ──────────────────────────────────────────────────
-    try:
-        r = await _run(["vmstat", "1", "2"], timeout=5)
-        if r.returncode == 0:
-            lines = [l for l in r.stdout.strip().split("\n") if l.strip()]
-            if len(lines) >= 3:
-                vals = lines[-1].split()
-                if len(vals) >= 17:
-                    hc["vmstat"] = {
-                        "procs_r": int(vals[0]),
-                        "procs_b": int(vals[1]),
-                        "io_bi": int(vals[8]),
-                        "io_bo": int(vals[9]),
-                        "cpu_us": int(vals[12]),
-                        "cpu_sy": int(vals[13]),
-                        "cpu_id": int(vals[14]),
-                        "cpu_wa": int(vals[15]),
-                    }
-    except Exception:
-        pass
-
-    # ── NFS Mounts ───────────────────────────────────────────────────────
+    # ── NFS Mounts from /proc/mounts (instant) ──────────────────────────
     nfs_mounts = []
     try:
         with open("/proc/mounts") as f:
@@ -1271,60 +1249,14 @@ async def get_health_check() -> dict:
         pass
     hc["nfs_mounts"] = nfs_mounts
 
-    # ── NFS Client Stats (nfsstat) ───────────────────────────────────────
-    try:
-        r = await _run(["nfsstat", "-c", "-3", "-4"], timeout=5)
-        nfs_stats = {"raw": "", "rpc_calls": 0, "retransmits": 0, "auth_refresh": 0}
-        if r.returncode == 0:
-            nfs_stats["raw"] = r.stdout.strip()
-            for line in r.stdout.split("\n"):
-                line = line.strip()
-                if line.startswith("calls"):
-                    parts = line.split()
-                    if len(parts) >= 4:
-                        nfs_stats["rpc_calls"] = (
-                            int(parts[1]) if parts[1].isdigit() else 0
-                        )
-                        nfs_stats["retransmits"] = (
-                            int(parts[2]) if parts[2].isdigit() else 0
-                        )
-                        nfs_stats["auth_refresh"] = (
-                            int(parts[3]) if parts[3].isdigit() else 0
-                        )
-        hc["nfs_stats"] = nfs_stats
-    except Exception:
-        hc["nfs_stats"] = {}
-
-    # ── NFS Connections per server ───────────────────────────────────────
-    try:
-        r = await _run(["ss", "-tn"])
-        conn_per_server: dict[str, int] = {}
-        total_nfs = 0
-        if r.returncode == 0:
-            for line in r.stdout.split("\n"):
-                if ":2049" in line:
-                    total_nfs += 1
-                    parts = line.split()
-                    for p in parts:
-                        if ":2049" in p:
-                            ip = p.rsplit(":", 1)[0]
-                            conn_per_server[ip] = conn_per_server.get(ip, 0) + 1
-                            break
-        hc["nfs_connections"] = {
-            "total": total_nfs,
-            "per_server": conn_per_server,
-        }
-    except Exception:
-        hc["nfs_connections"] = {"total": 0, "per_server": {}}
-
-    # ── NFS RPC Slots ────────────────────────────────────────────────────
+    # ── NFS RPC Slots (instant /proc read) ──────────────────────────────
     try:
         with open("/proc/sys/sunrpc/tcp_max_slot_table_entries") as f:
             hc["nfs_rpc_slots"] = int(f.read().strip())
     except Exception:
         hc["nfs_rpc_slots"] = None
 
-    # ── NFS Read-Ahead ───────────────────────────────────────────────────
+    # ── NFS Read-Ahead (instant /sys reads) ─────────────────────────────
     read_ahead = []
     try:
         for bdi in sorted(os.listdir("/sys/class/bdi")):
@@ -1337,7 +1269,7 @@ async def get_health_check() -> dict:
         pass
     hc["nfs_read_ahead"] = read_ahead
 
-    # ── MergerFS ─────────────────────────────────────────────────────────
+    # ── MergerFS from /proc (instant, no subprocess) ────────────────────
     mergerfs_info: dict = {"running": False}
     try:
         pids = []
@@ -1355,7 +1287,6 @@ async def get_health_check() -> dict:
             main_pid = pids[0]
             mergerfs_info["running"] = True
             mergerfs_info["pid"] = main_pid
-            # Parse cmdline
             with open(f"/proc/{main_pid}/cmdline", "rb") as f:
                 raw = f.read()
             args = raw.decode("utf-8", errors="replace").split("\x00")
@@ -1371,7 +1302,6 @@ async def get_health_check() -> dict:
                     mount_point = a
             mergerfs_info["mount_point"] = mount_point
             mergerfs_info["branches"] = branches.split(":") if branches else []
-            # Parse options into dict
             opts_dict = {}
             for opt in options_str.split(","):
                 if "=" in opt:
@@ -1381,47 +1311,10 @@ async def get_health_check() -> dict:
                     opts_dict[opt] = True
             mergerfs_info["options"] = opts_dict
             mergerfs_info["options_raw"] = options_str
-
-        # Version
-        r = await _run(["mergerfs", "--version"], timeout=3)
-        if r.returncode == 0:
-            ver = r.stderr.strip() or r.stdout.strip()
-            # mergerfs version: X.Y.Z
-            for part in ver.split("\n"):
-                if "version" in part.lower():
-                    mergerfs_info["version"] = part.split(":")[-1].strip().split()[0]
-                    break
-            if "version" not in mergerfs_info and ver:
-                mergerfs_info["version"] = ver.split()[0]
     except Exception:
         pass
-    hc["mergerfs"] = mergerfs_info
 
-    # ── Kernel Tuning ────────────────────────────────────────────────────
-    kernel_params = {
-        "net.core.rmem_max": None,
-        "net.core.wmem_max": None,
-        "net.ipv4.tcp_congestion_control": None,
-        "net.ipv4.tcp_rmem": None,
-        "net.ipv4.tcp_wmem": None,
-        "vm.dirty_ratio": None,
-        "vm.dirty_background_ratio": None,
-        "vm.vfs_cache_pressure": None,
-        "vm.swappiness": None,
-        "vm.max_map_count": None,
-        "sunrpc.tcp_max_slot_table_entries": None,
-        "net.core.default_qdisc": None,
-    }
-    for param in kernel_params:
-        try:
-            r = await _run(["sysctl", "-n", param], timeout=3)
-            if r.returncode == 0:
-                kernel_params[param] = r.stdout.strip()
-        except Exception:
-            pass
-    hc["kernel"] = kernel_params
-
-    # ── Network ──────────────────────────────────────────────────────────
+    # ── Network (instant psutil + /sys reads) ────────────────────────────
     try:
         iface = _detect_primary_interface()
         net = psutil.net_io_counters()
@@ -1432,7 +1325,6 @@ async def get_health_check() -> dict:
             "packets_recv": net.packets_recv,
             "packets_sent": net.packets_sent,
         }
-        # RPS/XPS
         if iface:
             rps_files = sorted(
                 glob.glob(f"/sys/class/net/{iface}/queues/rx-*/rps_cpus")
@@ -1444,108 +1336,277 @@ async def get_health_check() -> dict:
     except Exception:
         hc["network"] = {}
 
-    # ── Storage (/mnt paths) ─────────────────────────────────────────────
-    storage = []
-    try:
-        r = await _run(["df", "-B1", "--output=source,size,used,avail,pcent,target"])
-        if r.returncode == 0:
-            for line in r.stdout.strip().split("\n")[1:]:
-                if "/mnt" in line:
+    # ── Parallel subprocess / async tasks ────────────────────────────────
+
+    async def _gather_vmstat() -> dict:
+        """vmstat single instant sample (no 2-second sleep)."""
+        try:
+            r = await _run(["vmstat", "-n", "1", "1"], timeout=3)
+            if r.returncode == 0:
+                lines = [l for l in r.stdout.strip().split("\n") if l.strip()]
+                if len(lines) >= 2:
+                    vals = lines[-1].split()
+                    if len(vals) >= 17:
+                        return {
+                            "procs_r": int(vals[0]),
+                            "procs_b": int(vals[1]),
+                            "io_bi": int(vals[8]),
+                            "io_bo": int(vals[9]),
+                            "cpu_us": int(vals[12]),
+                            "cpu_sy": int(vals[13]),
+                            "cpu_id": int(vals[14]),
+                            "cpu_wa": int(vals[15]),
+                        }
+        except Exception:
+            pass
+        return {}
+
+    async def _gather_nfs_stats() -> dict:
+        """nfsstat client stats."""
+        try:
+            r = await _run(["nfsstat", "-c", "-3", "-4"], timeout=5)
+            nfs_stats: dict = {
+                "raw": "",
+                "rpc_calls": 0,
+                "retransmits": 0,
+                "auth_refresh": 0,
+            }
+            if r.returncode == 0:
+                nfs_stats["raw"] = r.stdout.strip()
+                for line in r.stdout.split("\n"):
+                    line = line.strip()
+                    if line.startswith("calls"):
+                        parts = line.split()
+                        if len(parts) >= 4:
+                            nfs_stats["rpc_calls"] = (
+                                int(parts[1]) if parts[1].isdigit() else 0
+                            )
+                            nfs_stats["retransmits"] = (
+                                int(parts[2]) if parts[2].isdigit() else 0
+                            )
+                            nfs_stats["auth_refresh"] = (
+                                int(parts[3]) if parts[3].isdigit() else 0
+                            )
+            return nfs_stats
+        except Exception:
+            return {}
+
+    async def _gather_nfs_connections() -> dict:
+        """NFS TCP connections via ss."""
+        try:
+            r = await _run(["ss", "-tn"], timeout=5)
+            conn_per_server: dict[str, int] = {}
+            total_nfs = 0
+            if r.returncode == 0:
+                for line in r.stdout.split("\n"):
+                    if ":2049" in line:
+                        total_nfs += 1
+                        parts = line.split()
+                        for p in parts:
+                            if ":2049" in p:
+                                ip = p.rsplit(":", 1)[0]
+                                conn_per_server[ip] = conn_per_server.get(ip, 0) + 1
+                                break
+            return {"total": total_nfs, "per_server": conn_per_server}
+        except Exception:
+            return {"total": 0, "per_server": {}}
+
+    async def _gather_kernel() -> dict:
+        """All kernel params in a single sysctl call."""
+        params = [
+            "net.core.rmem_max",
+            "net.core.wmem_max",
+            "net.ipv4.tcp_congestion_control",
+            "net.ipv4.tcp_rmem",
+            "net.ipv4.tcp_wmem",
+            "vm.dirty_ratio",
+            "vm.dirty_background_ratio",
+            "vm.vfs_cache_pressure",
+            "vm.swappiness",
+            "vm.max_map_count",
+            "sunrpc.tcp_max_slot_table_entries",
+            "net.core.default_qdisc",
+        ]
+        result = {p: None for p in params}
+        try:
+            r = await _run(["sysctl"] + params, timeout=5)
+            output = r.stdout.strip()
+            if r.returncode != 0:
+                output = (r.stdout + "\n" + r.stderr).strip()
+            for line in output.split("\n"):
+                if "=" in line:
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    val = val.strip()
+                    if key in result:
+                        result[key] = val
+        except Exception:
+            pass
+        return result
+
+    async def _gather_mergerfs_version() -> str | None:
+        """Get mergerfs version string."""
+        try:
+            r = await _run(["mergerfs", "--version"], timeout=3)
+            if r.returncode == 0:
+                ver = r.stderr.strip() or r.stdout.strip()
+                for part in ver.split("\n"):
+                    if "version" in part.lower():
+                        return part.split(":")[-1].strip().split()[0]
+                if ver:
+                    return ver.split()[0]
+        except Exception:
+            pass
+        return None
+
+    async def _gather_storage() -> list:
+        """Storage info via os.statvfs (avoids df subprocess on NFS mounts)."""
+        storage = []
+        mount_points: set[tuple[str, str]] = set()
+        try:
+            with open("/proc/mounts") as f:
+                for line in f:
                     parts = line.split()
-                    if len(parts) >= 6:
-                        storage.append(
+                    if len(parts) >= 2 and "/mnt" in parts[1]:
+                        mount_points.add((parts[0], parts[1]))
+        except Exception:
+            pass
+        loop = asyncio.get_event_loop()
+        for src, mp in sorted(mount_points, key=lambda x: x[1]):
+            try:
+                st = await loop.run_in_executor(None, os.statvfs, mp)  # type: ignore[attr-defined]
+                size = st.f_frsize * st.f_blocks
+                avail = st.f_frsize * st.f_bavail
+                used = size - (st.f_frsize * st.f_bfree)
+                pct = f"{int(used * 100 / size)}%" if size > 0 else "0%"
+                storage.append(
+                    {
+                        "filesystem": src,
+                        "size": size,
+                        "used": used,
+                        "avail": avail,
+                        "use_percent": pct,
+                        "mount_point": mp,
+                    }
+                )
+            except Exception:
+                continue
+        return storage
+
+    async def _gather_docker() -> list:
+        """Docker containers via nsenter."""
+        containers = []
+        try:
+            r = await _run(
+                [
+                    "nsenter",
+                    "-t",
+                    "1",
+                    "-m",
+                    "-p",
+                    "-n",
+                    "-i",
+                    "--",
+                    "docker",
+                    "ps",
+                    "--format",
+                    "{{json .}}",
+                ],
+                timeout=10,
+            )
+            if r.returncode != 0:
+                r = await _run(
+                    ["docker", "ps", "--format", "{{json .}}"],
+                    timeout=5,
+                )
+            if r.returncode == 0:
+                for line in r.stdout.strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    try:
+                        c = _json.loads(line)
+                        containers.append(
                             {
-                                "filesystem": parts[0],
-                                "size": int(parts[1]),
-                                "used": int(parts[2]),
-                                "avail": int(parts[3]),
-                                "use_percent": parts[4],
-                                "mount_point": parts[5],
+                                "name": c.get("Names", ""),
+                                "image": c.get("Image", ""),
+                                "status": c.get("Status", ""),
+                                "ports": c.get("Ports", ""),
                             }
                         )
-    except Exception:
-        pass
-    hc["storage"] = storage
+                    except _json.JSONDecodeError:
+                        pass
+        except Exception:
+            pass
+        return containers
 
-    # ── Docker Containers ────────────────────────────────────────────────
-    containers = []
-    try:
-        # Try host docker first (nsenter), fallback to in-container docker CLI
-        r = await _run(
-            [
-                "nsenter",
-                "-t",
-                "1",
-                "-m",
-                "-p",
-                "-n",
-                "-i",
-                "--",
-                "docker",
-                "ps",
-                "--format",
-                "{{json .}}",
-            ],
-            timeout=10,
-        )
-        if r.returncode != 0:
-            r = await _run(
-                ["docker", "ps", "--format", "{{json .}}"],
-                timeout=5,
-            )
-        if r.returncode == 0:
-            for line in r.stdout.strip().split("\n"):
-                if not line.strip():
-                    continue
-                try:
-                    c = _json.loads(line)
-                    containers.append(
+    async def _gather_database() -> dict:
+        """DB quick view."""
+        db_info: dict = {"mergerfs_configs": [], "nfs_mounts": []}
+        try:
+            from ..database import async_session as _async_session
+            from ..models.mergerfs_config import MergerFSConfig
+            from ..models.nfs_mount import NFSMount
+            from sqlalchemy import select as _select
+
+            async with _async_session() as _db:
+                res = await _db.execute(_select(MergerFSConfig))
+                for cfg in res.scalars().all():
+                    db_info["mergerfs_configs"].append(
                         {
-                            "name": c.get("Names", ""),
-                            "image": c.get("Image", ""),
-                            "status": c.get("Status", ""),
-                            "ports": c.get("Ports", ""),
+                            "name": cfg.name,
+                            "mount_point": cfg.mount_point,
+                            "sources": cfg.sources,
+                            "options": cfg.options,
                         }
                     )
-                except _json.JSONDecodeError:
-                    pass
-    except Exception:
-        pass
-    hc["docker"] = containers
+                res = await _db.execute(_select(NFSMount))
+                for m in res.scalars().all():
+                    db_info["nfs_mounts"].append(
+                        {
+                            "name": m.name,
+                            "server": m.server_ip,
+                            "remote_path": m.remote_path,
+                            "local_path": m.local_path,
+                            "options": m.options,
+                        }
+                    )
+        except Exception:
+            pass
+        return db_info
 
-    # ── Database Quick View ──────────────────────────────────────────────
-    db_info = {"mergerfs_configs": [], "nfs_mounts": []}
-    try:
-        from ..database import async_session as _async_session
-        from ..models.mergerfs_config import MergerFSConfig
-        from ..models.nfs_mount import NFSMount
-        from sqlalchemy import select as _select
+    # ── Run all subprocess/async tasks concurrently ──────────────────────
+    (
+        vmstat_data,
+        nfs_stats_data,
+        nfs_conn_data,
+        kernel_data,
+        mergerfs_ver,
+        storage_data,
+        docker_data,
+        db_data,
+    ) = await asyncio.gather(
+        _gather_vmstat(),
+        _gather_nfs_stats(),
+        _gather_nfs_connections(),
+        _gather_kernel(),
+        _gather_mergerfs_version(),
+        _gather_storage(),
+        _gather_docker(),
+        _gather_database(),
+    )
 
-        async with _async_session() as _db:
-            res = await _db.execute(_select(MergerFSConfig))
-            for cfg in res.scalars().all():
-                db_info["mergerfs_configs"].append(
-                    {
-                        "name": cfg.name,
-                        "mount_point": cfg.mount_point,
-                        "sources": cfg.sources,
-                        "options": cfg.options,
-                    }
-                )
-            res = await _db.execute(_select(NFSMount))
-            for m in res.scalars().all():
-                db_info["nfs_mounts"].append(
-                    {
-                        "name": m.name,
-                        "server": m.server_ip,
-                        "remote_path": m.remote_path,
-                        "local_path": m.local_path,
-                        "options": m.options,
-                    }
-                )
-    except Exception:
-        pass
-    hc["database"] = db_info
+    # ── Assemble results ─────────────────────────────────────────────────
+    if vmstat_data:
+        hc["vmstat"] = vmstat_data
+    hc["nfs_stats"] = nfs_stats_data
+    hc["nfs_connections"] = nfs_conn_data
+    hc["kernel"] = kernel_data
+    if mergerfs_ver:
+        mergerfs_info["version"] = mergerfs_ver
+    hc["mergerfs"] = mergerfs_info
+    hc["storage"] = storage_data
+    hc["docker"] = docker_data
+    hc["database"] = db_data
 
     return hc
 
