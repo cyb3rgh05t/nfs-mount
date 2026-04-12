@@ -95,6 +95,11 @@ async def diagnostics():
     return await system_service.get_diagnostics()
 
 
+@router.get("/health-check")
+async def health_check():
+    return await system_service.get_health_check()
+
+
 @router.post("/benchmark")
 async def benchmark(body: dict):
     mount_path = body.get("mount_path", "")

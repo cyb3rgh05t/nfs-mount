@@ -8,6 +8,7 @@ import NFSExportsPage from "./pages/NFSExportsPage";
 import MergerFSPage from "./pages/MergerFSPage";
 import SettingsPage from "./pages/SettingsPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
+import HealthCheckPage from "./pages/HealthCheckPage";
 import BenchmarkPage from "./pages/BenchmarkPage";
 import LogsPage from "./pages/LogsPage";
 import VPNPage from "./pages/VPNPage";
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/vpn" element={<VPNPage />} />
                 <Route path="/monitor" element={<ServerMonitorPage />} />
                 <Route path="/diagnostics" element={<DiagnosticsPage />} />
+                <Route path="/health" element={<HealthCheckPage />} />
                 <Route path="/benchmark" element={<BenchmarkPage />} />
                 <Route path="/logs" element={<LogsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

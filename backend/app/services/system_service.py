@@ -1162,3 +1162,382 @@ def _write_sync(path: str) -> None:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+# ---------------------------------------------------------------------------
+# Server Health Check  (comprehensive live status)
+# ---------------------------------------------------------------------------
+
+
+async def get_health_check() -> dict:
+    """Run comprehensive server health check — live system status."""
+    import json as _json
+
+    hc: dict = {}
+
+    # ── System Overview ──────────────────────────────────────────────────
+    mem = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    try:
+        load = list(os.getloadavg())
+    except (AttributeError, OSError):
+        cpu = _get_cpu()
+        load = [cpu, cpu, cpu]
+
+    hc["system"] = {
+        "uptime_seconds": int(psutil.boot_time()),
+        "uptime": _format_uptime(psutil.boot_time()),
+        "load_avg": [round(l, 2) for l in load],
+        "cpu_cores": os.cpu_count() or 1,
+        "cpu_percent": _get_cpu(),
+    }
+
+    hc["memory"] = {
+        "total": mem.total,
+        "used": mem.used,
+        "free": mem.available,
+        "buff_cache": (
+            mem.total - mem.used - mem.available + mem.available - mem.free
+            if hasattr(mem, "buffers")
+            else mem.cached + mem.buffers if hasattr(mem, "cached") else 0
+        ),
+        "available": mem.available,
+        "percent": mem.percent,
+        "swap_total": swap.total,
+        "swap_used": swap.used,
+        "swap_free": swap.free,
+        "swap_percent": swap.percent,
+    }
+    # Recalculate buff/cache more reliably
+    try:
+        with open("/proc/meminfo") as f:
+            mi = {}
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mi[parts[0].rstrip(":")] = int(parts[1]) * 1024  # kB -> bytes
+        hc["memory"]["buff_cache"] = mi.get("Buffers", 0) + mi.get("Cached", 0)
+        hc["memory"]["free"] = mi.get("MemFree", 0)
+        hc["memory"]["available"] = mi.get("MemAvailable", mem.available)
+    except Exception:
+        pass
+
+    # ── vmstat snapshot ──────────────────────────────────────────────────
+    try:
+        r = await _run(["vmstat", "1", "2"], timeout=5)
+        if r.returncode == 0:
+            lines = [l for l in r.stdout.strip().split("\n") if l.strip()]
+            if len(lines) >= 3:
+                vals = lines[-1].split()
+                if len(vals) >= 17:
+                    hc["vmstat"] = {
+                        "procs_r": int(vals[0]),
+                        "procs_b": int(vals[1]),
+                        "io_bi": int(vals[8]),
+                        "io_bo": int(vals[9]),
+                        "cpu_us": int(vals[12]),
+                        "cpu_sy": int(vals[13]),
+                        "cpu_id": int(vals[14]),
+                        "cpu_wa": int(vals[15]),
+                    }
+    except Exception:
+        pass
+
+    # ── NFS Mounts ───────────────────────────────────────────────────────
+    nfs_mounts = []
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[2] in ("nfs", "nfs4"):
+                    device = parts[0]
+                    server = device.split(":")[0] if ":" in device else ""
+                    export_path = device.split(":", 1)[1] if ":" in device else device
+                    nfs_mounts.append(
+                        {
+                            "server": server,
+                            "export": export_path,
+                            "mount_point": parts[1],
+                            "fs_type": parts[2],
+                            "options": parts[3],
+                        }
+                    )
+    except Exception:
+        pass
+    hc["nfs_mounts"] = nfs_mounts
+
+    # ── NFS Client Stats (nfsstat) ───────────────────────────────────────
+    try:
+        r = await _run(["nfsstat", "-c", "-3", "-4"], timeout=5)
+        nfs_stats = {"raw": "", "rpc_calls": 0, "retransmits": 0, "auth_refresh": 0}
+        if r.returncode == 0:
+            nfs_stats["raw"] = r.stdout.strip()
+            for line in r.stdout.split("\n"):
+                line = line.strip()
+                if line.startswith("calls"):
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        nfs_stats["rpc_calls"] = (
+                            int(parts[1]) if parts[1].isdigit() else 0
+                        )
+                        nfs_stats["retransmits"] = (
+                            int(parts[2]) if parts[2].isdigit() else 0
+                        )
+                        nfs_stats["auth_refresh"] = (
+                            int(parts[3]) if parts[3].isdigit() else 0
+                        )
+        hc["nfs_stats"] = nfs_stats
+    except Exception:
+        hc["nfs_stats"] = {}
+
+    # ── NFS Connections per server ───────────────────────────────────────
+    try:
+        r = await _run(["ss", "-tn"])
+        conn_per_server: dict[str, int] = {}
+        total_nfs = 0
+        if r.returncode == 0:
+            for line in r.stdout.split("\n"):
+                if ":2049" in line:
+                    total_nfs += 1
+                    parts = line.split()
+                    for p in parts:
+                        if ":2049" in p:
+                            ip = p.rsplit(":", 1)[0]
+                            conn_per_server[ip] = conn_per_server.get(ip, 0) + 1
+                            break
+        hc["nfs_connections"] = {
+            "total": total_nfs,
+            "per_server": conn_per_server,
+        }
+    except Exception:
+        hc["nfs_connections"] = {"total": 0, "per_server": {}}
+
+    # ── NFS RPC Slots ────────────────────────────────────────────────────
+    try:
+        with open("/proc/sys/sunrpc/tcp_max_slot_table_entries") as f:
+            hc["nfs_rpc_slots"] = int(f.read().strip())
+    except Exception:
+        hc["nfs_rpc_slots"] = None
+
+    # ── NFS Read-Ahead ───────────────────────────────────────────────────
+    read_ahead = []
+    try:
+        for bdi in sorted(os.listdir("/sys/class/bdi")):
+            ra_path = f"/sys/class/bdi/{bdi}/read_ahead_kb"
+            if os.path.isfile(ra_path) and bdi.startswith("0:"):
+                with open(ra_path) as f:
+                    val = int(f.read().strip())
+                read_ahead.append({"device": bdi, "read_ahead_kb": val})
+    except Exception:
+        pass
+    hc["nfs_read_ahead"] = read_ahead
+
+    # ── MergerFS ─────────────────────────────────────────────────────────
+    mergerfs_info: dict = {"running": False}
+    try:
+        pids = []
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid}/comm") as f:
+                    if f.read().strip() == "mergerfs":
+                        pids.append(int(pid))
+            except (OSError, PermissionError):
+                continue
+
+        if pids:
+            main_pid = pids[0]
+            mergerfs_info["running"] = True
+            mergerfs_info["pid"] = main_pid
+            # Parse cmdline
+            with open(f"/proc/{main_pid}/cmdline", "rb") as f:
+                raw = f.read()
+            args = raw.decode("utf-8", errors="replace").split("\x00")
+            options_str = ""
+            branches = ""
+            mount_point = ""
+            for i, a in enumerate(args):
+                if a == "-o" and i + 1 < len(args):
+                    options_str = args[i + 1]
+                elif ":" in a and a.startswith("/"):
+                    branches = a
+                elif a.startswith("/") and not a.startswith("/proc") and ":" not in a:
+                    mount_point = a
+            mergerfs_info["mount_point"] = mount_point
+            mergerfs_info["branches"] = branches.split(":") if branches else []
+            # Parse options into dict
+            opts_dict = {}
+            for opt in options_str.split(","):
+                if "=" in opt:
+                    k, v = opt.split("=", 1)
+                    opts_dict[k] = v
+                elif opt:
+                    opts_dict[opt] = True
+            mergerfs_info["options"] = opts_dict
+            mergerfs_info["options_raw"] = options_str
+
+        # Version
+        r = await _run(["mergerfs", "--version"], timeout=3)
+        if r.returncode == 0:
+            ver = r.stderr.strip() or r.stdout.strip()
+            # mergerfs version: X.Y.Z
+            for part in ver.split("\n"):
+                if "version" in part.lower():
+                    mergerfs_info["version"] = part.split(":")[-1].strip().split()[0]
+                    break
+            if "version" not in mergerfs_info and ver:
+                mergerfs_info["version"] = ver.split()[0]
+    except Exception:
+        pass
+    hc["mergerfs"] = mergerfs_info
+
+    # ── Kernel Tuning ────────────────────────────────────────────────────
+    kernel_params = {
+        "net.core.rmem_max": None,
+        "net.core.wmem_max": None,
+        "net.ipv4.tcp_congestion_control": None,
+        "net.ipv4.tcp_rmem": None,
+        "net.ipv4.tcp_wmem": None,
+        "vm.dirty_ratio": None,
+        "vm.dirty_background_ratio": None,
+        "vm.vfs_cache_pressure": None,
+        "vm.swappiness": None,
+        "vm.max_map_count": None,
+        "sunrpc.tcp_max_slot_table_entries": None,
+        "net.core.default_qdisc": None,
+    }
+    for param in kernel_params:
+        try:
+            r = await _run(["sysctl", "-n", param], timeout=3)
+            if r.returncode == 0:
+                kernel_params[param] = r.stdout.strip()
+        except Exception:
+            pass
+    hc["kernel"] = kernel_params
+
+    # ── Network ──────────────────────────────────────────────────────────
+    try:
+        iface = _detect_primary_interface()
+        net = psutil.net_io_counters()
+        net_info = {
+            "interface": iface,
+            "bytes_recv": net.bytes_recv,
+            "bytes_sent": net.bytes_sent,
+            "packets_recv": net.packets_recv,
+            "packets_sent": net.packets_sent,
+        }
+        # RPS/XPS
+        if iface:
+            rps_files = sorted(
+                glob.glob(f"/sys/class/net/{iface}/queues/rx-*/rps_cpus")
+            )
+            if rps_files:
+                with open(rps_files[0]) as f:
+                    net_info["rps_cpus"] = f.read().strip()
+        hc["network"] = net_info
+    except Exception:
+        hc["network"] = {}
+
+    # ── Storage (/mnt paths) ─────────────────────────────────────────────
+    storage = []
+    try:
+        r = await _run(["df", "-B1", "--output=source,size,used,avail,pcent,target"])
+        if r.returncode == 0:
+            for line in r.stdout.strip().split("\n")[1:]:
+                if "/mnt" in line:
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        storage.append(
+                            {
+                                "filesystem": parts[0],
+                                "size": int(parts[1]),
+                                "used": int(parts[2]),
+                                "avail": int(parts[3]),
+                                "use_percent": parts[4],
+                                "mount_point": parts[5],
+                            }
+                        )
+    except Exception:
+        pass
+    hc["storage"] = storage
+
+    # ── Docker Containers ────────────────────────────────────────────────
+    containers = []
+    try:
+        r = await _run(
+            ["docker", "ps", "--format", "{{json .}}"],
+            timeout=5,
+        )
+        if r.returncode == 0:
+            for line in r.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                try:
+                    c = _json.loads(line)
+                    containers.append(
+                        {
+                            "name": c.get("Names", ""),
+                            "image": c.get("Image", ""),
+                            "status": c.get("Status", ""),
+                            "ports": c.get("Ports", ""),
+                        }
+                    )
+                except _json.JSONDecodeError:
+                    pass
+    except Exception:
+        pass
+    hc["docker"] = containers
+
+    # ── Database Quick View ──────────────────────────────────────────────
+    db_info = {"mergerfs_configs": [], "nfs_mounts": []}
+    try:
+        from ..database import async_session as _async_session
+        from ..models.mergerfs_config import MergerFSConfig
+        from ..models.nfs_mount import NFSMount
+        from sqlalchemy import select as _select
+
+        async with _async_session() as _db:
+            res = await _db.execute(_select(MergerFSConfig))
+            for cfg in res.scalars().all():
+                db_info["mergerfs_configs"].append(
+                    {
+                        "name": cfg.name,
+                        "mount_point": cfg.mount_point,
+                        "branches": cfg.branches,
+                        "options": cfg.options,
+                    }
+                )
+            res = await _db.execute(_select(NFSMount))
+            for m in res.scalars().all():
+                db_info["nfs_mounts"].append(
+                    {
+                        "name": m.name,
+                        "server": m.server,
+                        "remote_path": m.remote_path,
+                        "local_path": m.local_path,
+                        "mount_options": m.mount_options,
+                    }
+                )
+    except Exception:
+        pass
+    hc["database"] = db_info
+
+    return hc
+
+
+def _format_uptime(boot_time: float) -> str:
+    """Format uptime from boot_time timestamp."""
+    import time as _time
+
+    diff = _time.time() - boot_time
+    days = int(diff // 86400)
+    hours = int((diff % 86400) // 3600)
+    mins = int((diff % 3600) // 60)
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    parts.append(f"{mins}m")
+    return " ".join(parts)

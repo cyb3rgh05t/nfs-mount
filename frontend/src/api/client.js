@@ -142,6 +142,7 @@ const api = {
   setNfsThreads: (threads) =>
     request("POST", "/system/nfs-threads", { threads }),
   getDiagnostics: () => request("GET", "/system/diagnostics"),
+  getHealthCheck: () => request("GET", "/system/health-check"),
   runBenchmark: (mount_path, file_size_mb = 256) =>
     request("POST", "/system/benchmark", { mount_path, file_size_mb }),
 
