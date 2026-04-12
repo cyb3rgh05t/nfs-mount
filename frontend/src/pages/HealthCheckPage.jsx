@@ -18,6 +18,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { useToast } from "../components/ToastProvider";
+import Toggle from "../components/Toggle";
 import api from "../api/client";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -179,24 +180,20 @@ export default function HealthCheckPage() {
               {lastUpdate.toLocaleTimeString()}
             </span>
           )}
-          <label className="flex items-center gap-2 text-sm text-nfs-muted cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-nfs-border bg-nfs-input text-nfs-primary focus:ring-nfs-primary"
-            />
-            Auto (10s)
-          </label>
+          <Toggle
+            checked={autoRefresh}
+            onChange={setAutoRefresh}
+            label="Auto (10s)"
+          />
           <button
             onClick={runCheck}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-emerald-500 text-white rounded-lg text-sm font-medium transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
           >
             {loading ? (
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+              <RefreshCw className="w-4 h-4 animate-spin text-nfs-primary" />
             ) : (
-              <HeartPulse className="w-4 h-4 text-emerald-400" />
+              <HeartPulse className="w-4 h-4 text-nfs-primary" />
             )}
             {loading ? "Checking..." : "Run Health Check"}
           </button>
@@ -632,7 +629,7 @@ export default function HealthCheckPage() {
                       </code>
                     </div>
                     <p className="text-xs text-nfs-muted font-mono">
-                      Branches: {cfg.branches}
+                      Sources: {cfg.sources}
                     </p>
                     <p className="text-xs text-nfs-muted font-mono break-all mt-1">
                       {cfg.options}
@@ -664,7 +661,7 @@ export default function HealthCheckPage() {
                       </code>
                     </div>
                     <p className="text-xs text-nfs-muted font-mono break-all">
-                      {m.mount_options}
+                      {m.options}
                     </p>
                   </div>
                 ))}

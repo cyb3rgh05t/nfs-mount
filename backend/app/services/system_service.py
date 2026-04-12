@@ -1179,7 +1179,7 @@ async def get_health_check() -> dict:
     mem = psutil.virtual_memory()
     swap = psutil.swap_memory()
     try:
-        load = list(os.getloadavg())
+        load = list(os.getloadavg())  # type: ignore[attr-defined]
     except (AttributeError, OSError):
         cpu = _get_cpu()
         load = [cpu, cpu, cpu]
@@ -1192,15 +1192,20 @@ async def get_health_check() -> dict:
         "cpu_percent": _get_cpu(),
     }
 
+    # buff/cache: try /proc/meminfo first (Linux), fallback to psutil attrs
+    buff_cache = 0
+    try:
+        buffers = getattr(mem, "buffers", 0) or 0
+        cached = getattr(mem, "cached", 0) or 0
+        buff_cache = buffers + cached
+    except Exception:
+        pass
+
     hc["memory"] = {
         "total": mem.total,
         "used": mem.used,
         "free": mem.available,
-        "buff_cache": (
-            mem.total - mem.used - mem.available + mem.available - mem.free
-            if hasattr(mem, "buffers")
-            else mem.cached + mem.buffers if hasattr(mem, "cached") else 0
-        ),
+        "buff_cache": buff_cache,
         "available": mem.available,
         "percent": mem.percent,
         "swap_total": swap.total,
@@ -1465,10 +1470,29 @@ async def get_health_check() -> dict:
     # ── Docker Containers ────────────────────────────────────────────────
     containers = []
     try:
+        # Try host docker first (nsenter), fallback to in-container docker CLI
         r = await _run(
-            ["docker", "ps", "--format", "{{json .}}"],
-            timeout=5,
+            [
+                "nsenter",
+                "-t",
+                "1",
+                "-m",
+                "-p",
+                "-n",
+                "-i",
+                "--",
+                "docker",
+                "ps",
+                "--format",
+                "{{json .}}",
+            ],
+            timeout=10,
         )
+        if r.returncode != 0:
+            r = await _run(
+                ["docker", "ps", "--format", "{{json .}}"],
+                timeout=5,
+            )
         if r.returncode == 0:
             for line in r.stdout.strip().split("\n"):
                 if not line.strip():
@@ -1504,7 +1528,7 @@ async def get_health_check() -> dict:
                     {
                         "name": cfg.name,
                         "mount_point": cfg.mount_point,
-                        "branches": cfg.branches,
+                        "sources": cfg.sources,
                         "options": cfg.options,
                     }
                 )
@@ -1513,10 +1537,10 @@ async def get_health_check() -> dict:
                 db_info["nfs_mounts"].append(
                     {
                         "name": m.name,
-                        "server": m.server,
+                        "server": m.server_ip,
                         "remote_path": m.remote_path,
                         "local_path": m.local_path,
-                        "mount_options": m.mount_options,
+                        "options": m.options,
                     }
                 )
     except Exception:
