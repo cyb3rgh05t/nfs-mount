@@ -155,7 +155,11 @@ def _get_live_nfs_options(local_path: str) -> str | None:
         with open("/proc/mounts") as f:
             for line in f:
                 parts = line.split()
-                if len(parts) >= 4 and parts[1] == local_path and parts[2] in ("nfs", "nfs4"):
+                if (
+                    len(parts) >= 4
+                    and parts[1] == local_path
+                    and parts[2] in ("nfs", "nfs4")
+                ):
                     return parts[3]
     except Exception:
         pass

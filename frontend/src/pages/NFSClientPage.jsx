@@ -573,16 +573,20 @@ export default function NFSClientPage() {
                     <p className="text-xs text-emerald-400 font-mono break-all leading-relaxed">
                       {st.live_options}
                     </p>
-                    {st.db_options && st.live_options !== st.db_options && (() => {
-                      const liveSet = new Set(st.live_options.split(","));
-                      const dbSet = new Set(st.db_options.split(","));
-                      const missing = [...dbSet].filter(o => !liveSet.has(o));
-                      return missing.length > 0 ? (
-                        <p className="text-[10px] text-amber-400 mt-1">
-                          DB options not in live: {missing.join(", ")}
-                        </p>
-                      ) : null;
-                    })()}
+                    {st.db_options &&
+                      st.live_options !== st.db_options &&
+                      (() => {
+                        const liveSet = new Set(st.live_options.split(","));
+                        const dbSet = new Set(st.db_options.split(","));
+                        const missing = [...dbSet].filter(
+                          (o) => !liveSet.has(o),
+                        );
+                        return missing.length > 0 ? (
+                          <p className="text-[10px] text-amber-400 mt-1">
+                            DB options not in live: {missing.join(", ")}
+                          </p>
+                        ) : null;
+                      })()}
                   </div>
                 )}
               </div>
