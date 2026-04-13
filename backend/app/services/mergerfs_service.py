@@ -56,7 +56,7 @@ async def mount_mergerfs(config: MergerFSConfig) -> dict:
     )
     options = (
         config.options
-        or "rw,use_ino,allow_other,statfs_ignore=nc,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,cache.entry=60,cache.negative_entry=60,cache.attr=60,cache.statfs=60,dropcacheonclose=true,kernel_cache,splice_move,splice_read,fsname=mergerfs"
+        or "rw,use_ino,allow_other,statfs_ignore=nc,func.getattr=newest,category.action=all,category.create=ff,cache.files=partial,dropcacheonclose=true,kernel_cache,splice_move,splice_read,direct_io,fsname=mergerfs"
     )
 
     # Unmount if already mounted (do this BEFORE makedirs to avoid stale mount issues)
