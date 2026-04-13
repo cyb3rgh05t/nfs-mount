@@ -149,17 +149,36 @@ def validate_nfs(mount: NFSMount) -> bool:
     return os.path.isfile(mount.check_file)
 
 
+def _get_live_nfs_options(local_path: str) -> str | None:
+    """Read actual mount options from /proc/mounts for a given path."""
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4 and parts[1] == local_path and parts[2] in ("nfs", "nfs4"):
+                    return parts[3]
+    except Exception:
+        pass
+    return None
+
+
 async def get_mount_status(mount: NFSMount) -> dict:
     """Get comprehensive status for an NFS mount."""
-    return {
+    mounted = is_mounted(mount.local_path)
+    status = {
         "id": mount.id,
         "name": mount.name,
         "local_path": mount.local_path,
-        "mounted": is_mounted(mount.local_path),
+        "mounted": mounted,
         "validated": validate_nfs(mount),
         "server_reachable": is_server_reachable(mount.server_ip),
         "auto_mount": mount.auto_mount,
+        "live_options": None,
+        "db_options": mount.options or "",
     }
+    if mounted:
+        status["live_options"] = _get_live_nfs_options(mount.local_path)
+    return status
 
 
 async def auto_mount_nfs() -> list[dict]:

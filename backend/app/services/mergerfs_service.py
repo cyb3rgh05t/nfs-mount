@@ -120,6 +120,42 @@ def _format_size(size_bytes: int | float) -> str:
     return f"{value:.1f} EB"
 
 
+def _get_live_mergerfs_info() -> dict | None:
+    """Read actual MergerFS options from /proc/{pid}/cmdline."""
+    try:
+        for pid in os.listdir("/proc"):
+            if not pid.isdigit():
+                continue
+            try:
+                with open(f"/proc/{pid}/comm") as f:
+                    if f.read().strip() != "mergerfs":
+                        continue
+            except (OSError, PermissionError):
+                continue
+            with open(f"/proc/{pid}/cmdline", "rb") as f:
+                raw = f.read()
+            args = raw.decode("utf-8", errors="replace").split("\x00")
+            options_str = ""
+            branches = ""
+            mount_point = ""
+            for i, a in enumerate(args):
+                if a == "-o" and i + 1 < len(args):
+                    options_str = args[i + 1]
+                elif ":" in a and a.startswith("/"):
+                    branches = a
+                elif a.startswith("/") and not a.startswith("/proc") and ":" not in a:
+                    mount_point = a
+            return {
+                "options": options_str,
+                "branches": branches,
+                "mount_point": mount_point,
+                "pid": int(pid),
+            }
+    except Exception:
+        pass
+    return None
+
+
 async def get_mount_status(config: MergerFSConfig) -> dict:
     mounted = is_mounted(config.mount_point)
     status = {
@@ -131,6 +167,9 @@ async def get_mount_status(config: MergerFSConfig) -> dict:
         "total_space": None,
         "used_space": None,
         "free_space": None,
+        "live_options": None,
+        "live_sources": None,
+        "db_options": config.options or "",
     }
     if mounted:
         try:
@@ -143,6 +182,10 @@ async def get_mount_status(config: MergerFSConfig) -> dict:
             )
         except Exception:
             pass
+        live = _get_live_mergerfs_info()
+        if live and live["mount_point"] == config.mount_point:
+            status["live_options"] = live["options"]
+            status["live_sources"] = live["branches"]
     return status
 
 

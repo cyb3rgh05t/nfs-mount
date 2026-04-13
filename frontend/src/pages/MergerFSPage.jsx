@@ -603,6 +603,48 @@ export default function MergerFSPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Live Options */}
+                {st?.mounted && st?.live_options && (
+                  <div className="mt-2 bg-nfs-input/50 border border-nfs-border/40 rounded-lg px-3 py-2">
+                    <p className="text-[10px] text-nfs-muted uppercase tracking-wider mb-1">
+                      Live Mount Options
+                    </p>
+                    <p className="text-xs text-emerald-400 font-mono break-all leading-relaxed">
+                      {st.live_options}
+                    </p>
+                    {st.live_sources && (
+                      <div className="mt-1.5">
+                        <p className="text-[10px] text-nfs-muted uppercase tracking-wider mb-0.5">
+                          Live Sources
+                        </p>
+                        <p className="text-xs text-blue-300 font-mono break-all">
+                          {st.live_sources}
+                        </p>
+                      </div>
+                    )}
+                    {st.db_options && st.live_options !== st.db_options && (() => {
+                      const liveSet = new Set(st.live_options.split(","));
+                      const dbSet = new Set(st.db_options.split(","));
+                      const missing = [...dbSet].filter(o => !liveSet.has(o));
+                      const extra = [...liveSet].filter(o => !dbSet.has(o));
+                      return (missing.length > 0 || extra.length > 0) ? (
+                        <div className="mt-1.5 pt-1.5 border-t border-nfs-border/30">
+                          {missing.length > 0 && (
+                            <p className="text-[10px] text-amber-400">
+                              DB only: {missing.join(", ")}
+                            </p>
+                          )}
+                          {extra.length > 0 && (
+                            <p className="text-[10px] text-cyan-400">
+                              Live only: {extra.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
               </div>
             );
           })}
