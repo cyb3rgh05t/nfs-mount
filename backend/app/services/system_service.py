@@ -4,12 +4,14 @@ import os
 import subprocess
 import logging
 import threading
+import time
 
 import psutil
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.system_setting import SystemSetting
+from ..logging_config import set_log_level
 from .cache import cached
 
 logger = logging.getLogger("nfs-manager.service.system")
@@ -512,8 +514,124 @@ async def load_saved_rpsxps(db: AsyncSession) -> dict:
     return {s.key: s.value for s in result.scalars().all()}
 
 
+# ── Application Settings (log level, timezone) ──────────────────────────────
+
+VALID_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+VALID_TIMEZONES_COMMON = [
+    "UTC",
+    "Europe/Berlin",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Amsterdam",
+    "Europe/Zurich",
+    "Europe/Vienna",
+    "Europe/Rome",
+    "Europe/Madrid",
+    "Europe/Warsaw",
+    "Europe/Prague",
+    "Europe/Stockholm",
+    "Europe/Helsinki",
+    "Europe/Moscow",
+    "Europe/Istanbul",
+    "US/Eastern",
+    "US/Central",
+    "US/Mountain",
+    "US/Pacific",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Toronto",
+    "America/Sao_Paulo",
+    "Asia/Tokyo",
+    "Asia/Shanghai",
+    "Asia/Kolkata",
+    "Asia/Singapore",
+    "Asia/Dubai",
+    "Asia/Seoul",
+    "Asia/Hong_Kong",
+    "Australia/Sydney",
+    "Australia/Melbourne",
+    "Pacific/Auckland",
+]
+
+
+async def get_app_settings(db: AsyncSession) -> dict:
+    """Get application settings (from DB, falling back to env/defaults)."""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.category == "app")
+    )
+    saved = {s.key: s.value for s in result.scalars().all()}
+
+    return {
+        "log_level": saved.get(
+            "log_level", os.environ.get("LOG_LEVEL", "INFO")
+        ).upper(),
+        "timezone": saved.get("timezone", os.environ.get("TZ", "UTC")),
+        "valid_log_levels": list(VALID_LOG_LEVELS),
+        "valid_timezones": VALID_TIMEZONES_COMMON,
+    }
+
+
+async def update_app_settings(data: dict, db: AsyncSession) -> dict:
+    """Update application settings (log level, timezone)."""
+    results = {}
+
+    # Log level
+    if "log_level" in data:
+        level = data["log_level"].upper()
+        if level not in VALID_LOG_LEVELS:
+            return {"success": False, "error": f"Invalid log level: {level}"}
+        set_log_level(level)
+        await _save_setting(db, "app", "log_level", level)
+        await db.commit()
+        results["log_level"] = level
+        logger.info("Log level changed to %s", level)
+
+    # Timezone
+    if "timezone" in data:
+        tz = data["timezone"]
+        # Validate by checking if the timezone file exists
+        if tz != "UTC" and not os.path.isfile(f"/usr/share/zoneinfo/{tz}"):
+            return {"success": False, "error": f"Invalid timezone: {tz}"}
+        os.environ["TZ"] = tz
+        try:
+            time.tzset()
+        except AttributeError:
+            pass  # Windows doesn't have tzset
+        await _save_setting(db, "app", "timezone", tz)
+        await db.commit()
+        results["timezone"] = tz
+        logger.info("Timezone changed to %s", tz)
+
+    return {"success": True, **results}
+
+
+async def apply_saved_app_settings(db: AsyncSession):
+    """Apply saved app settings at startup (log level, timezone)."""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.category == "app")
+    )
+    saved = {s.key: s.value for s in result.scalars().all()}
+
+    if "log_level" in saved:
+        set_log_level(saved["log_level"])
+        logger.info("Restored log level: %s", saved["log_level"])
+
+    if "timezone" in saved:
+        os.environ["TZ"] = saved["timezone"]
+        try:
+            time.tzset()
+        except AttributeError:
+            pass
+        logger.info("Restored timezone: %s", saved["timezone"])
+
+
 async def auto_apply_saved_settings(db: AsyncSession):
-    """Apply all saved kernel + RPS/XPS settings (called at startup)."""
+    """Apply all saved kernel + RPS/XPS + app settings (called at startup)."""
+    # App settings (log level, timezone) — apply first
+    await apply_saved_app_settings(db)
+
     # Kernel params
     saved = await load_saved_kernel_params(db)
     if saved:

@@ -2,7 +2,8 @@
 Request / response logging middleware.
 
 Logs API requests with method, path, status, duration, and user info.
-Polling endpoints (status checks every 5 s) are logged at DEBUG to reduce noise.
+All successful (2xx/3xx) requests are logged at DEBUG to reduce noise.
+Errors (4xx) at WARNING, server errors (5xx) at ERROR.
 """
 
 import logging
@@ -13,23 +14,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 logger = logging.getLogger("nfs-manager.middleware")
-
-# Paths polled frequently by the frontend — log only at DEBUG
-_POLLING_PATHS: set[str] = {
-    "/api/system/health",
-    "/api/system/status",
-    "/api/system/stats",
-    "/api/nfs/status",
-    "/api/nfs/exports",
-    "/api/nfs/exports-status",
-    "/api/nfs/exports-system",
-    "/api/mergerfs/status",
-    "/api/vpn/status",
-    "/api/firewall/status",
-    "/api/system/kernel-params",
-    "/api/system/rps-xps",
-    "/api/server-monitor/metrics",
-}
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -46,16 +30,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         msg = f"{method} {path} → {status} ({duration_ms:.0f}ms) [client={client}]"
 
-        # Polling GETs → DEBUG only
-        is_polling = method == "GET" and path in _POLLING_PATHS
-
         if status >= 500:
             logger.error(msg)
         elif status >= 400:
             logger.warning(msg)
-        elif is_polling:
-            logger.debug(msg)
         else:
-            logger.info(msg)
+            logger.debug(msg)
 
         return response

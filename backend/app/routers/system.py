@@ -95,6 +95,17 @@ async def diagnostics():
     return await system_service.get_diagnostics()
 
 
+@router.get("/app-settings")
+async def get_app_settings(db: AsyncSession = Depends(get_db)):
+    return await system_service.get_app_settings(db)
+
+
+@router.post("/app-settings")
+async def update_app_settings(data: dict, db: AsyncSession = Depends(get_db)):
+    logger.info("Updating app settings: %s", list(data.keys()))
+    return await system_service.update_app_settings(data, db)
+
+
 @router.get("/health-check")
 async def health_check():
     return await system_service.get_health_check()

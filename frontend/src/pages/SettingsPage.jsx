@@ -151,6 +151,7 @@ export default function SettingsPage() {
     "settings-nfsthreads",
     null,
   );
+  const [appSettings, setAppSettings] = useCachedState("settings-app", null);
   const [apiKeys, setApiKeys] = useCachedState("settings-apikeys", []);
   const [sshKeys, setSSHKeys] = useCachedState("settings-sshkeys", []);
   const [uploading, setUploading] = useState(false);
@@ -201,17 +202,27 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [notifs, params, docker, keys, users, rpsxps, fwStatus, nfsT] =
-        await Promise.all([
-          api.getNotificationConfigs().catch(() => []),
-          api.getKernelParams().catch(() => []),
-          api.getDockerInfo().catch(() => null),
-          api.getApiKeys().catch(() => []),
-          user?.is_admin ? api.getUsers().catch(() => []) : Promise.resolve([]),
-          api.getRpsXps().catch(() => null),
-          api.getFirewallStatus().catch(() => null),
-          api.getNfsThreads().catch(() => null),
-        ]);
+      const [
+        notifs,
+        params,
+        docker,
+        keys,
+        users,
+        rpsxps,
+        fwStatus,
+        nfsT,
+        appS,
+      ] = await Promise.all([
+        api.getNotificationConfigs().catch(() => []),
+        api.getKernelParams().catch(() => []),
+        api.getDockerInfo().catch(() => null),
+        api.getApiKeys().catch(() => []),
+        user?.is_admin ? api.getUsers().catch(() => []) : Promise.resolve([]),
+        api.getRpsXps().catch(() => null),
+        api.getFirewallStatus().catch(() => null),
+        api.getNfsThreads().catch(() => null),
+        api.getAppSettings().catch(() => null),
+      ]);
       setConfigs(notifs);
       setKernelParams(params);
       setDockerInfo(docker);
@@ -220,6 +231,7 @@ export default function SettingsPage() {
       setRpsXps(rpsxps);
       setFirewallStatus(fwStatus);
       setNfsThreads(nfsT);
+      setAppSettings(appS);
 
       const discord = notifs.find((n) => n.type === "discord");
       if (discord) {
@@ -1288,6 +1300,101 @@ export default function SettingsPage() {
       {/* System Tab */}
       {activeTab === "system" && (
         <>
+          {/* Application Settings */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                  <Settings className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Application Settings
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    Log level and timezone (persisted to DB, overrides
+                    docker-compose env)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!appSettings) return;
+                  try {
+                    const res = await api.updateAppSettings({
+                      log_level: appSettings.log_level,
+                      timezone: appSettings.timezone,
+                    });
+                    if (res.success) {
+                      toast.success("Application settings saved");
+                      const fresh = await api
+                        .getAppSettings()
+                        .catch(() => null);
+                      if (fresh) setAppSettings(fresh);
+                    } else {
+                      toast.error(res.error || "Failed to save settings");
+                    }
+                  } catch (e) {
+                    toast.error(e.message);
+                  }
+                }}
+                className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+              >
+                <Save className="w-4 h-4 text-nfs-primary" />
+                Save
+              </button>
+            </div>
+
+            {appSettings ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2">
+                  <span className="text-xs text-nfs-text flex-1 min-w-0">
+                    Log Level
+                  </span>
+                  <select
+                    className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                    value={appSettings.log_level}
+                    onChange={(e) =>
+                      setAppSettings((prev) => ({
+                        ...prev,
+                        log_level: e.target.value,
+                      }))
+                    }
+                  >
+                    {(appSettings.valid_log_levels || []).map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {lvl}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2">
+                  <span className="text-xs text-nfs-text flex-1 min-w-0">
+                    Timezone
+                  </span>
+                  <select
+                    className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                    value={appSettings.timezone}
+                    onChange={(e) =>
+                      setAppSettings((prev) => ({
+                        ...prev,
+                        timezone: e.target.value,
+                      }))
+                    }
+                  >
+                    {(appSettings.valid_timezones || []).map((tz) => (
+                      <option key={tz} value={tz}>
+                        {tz}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-nfs-muted">Loading...</p>
+            )}
+          </div>
+
           <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">

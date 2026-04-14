@@ -98,8 +98,27 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    # Filter out "Invalid HTTP request received" spam from bots/scanners
+    class InvalidRequestFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "Invalid HTTP request received" not in record.getMessage()
+
+    logging.getLogger("uvicorn.error").addFilter(InvalidRequestFilter())
+
     root_logger.info(
         "Logging initialized (level=%s, file=%s)",
         level.upper(),
         LOG_FILE if os.path.isdir(LOG_DIR) else "console-only",
     )
+
+
+def set_log_level(level: str) -> None:
+    """Change log level at runtime for all handlers."""
+    numeric_level = getattr(logging, level.upper(), None)
+    if numeric_level is None:
+        return
+    root_logger = logging.getLogger("nfs-manager")
+    root_logger.setLevel(numeric_level)
+    for handler in root_logger.handlers:
+        handler.setLevel(numeric_level)
+    root_logger.info("Log level changed to %s", level.upper())
