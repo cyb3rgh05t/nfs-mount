@@ -171,12 +171,14 @@ export default function SettingsPage() {
     webhook_url: "",
     enabled: false,
   });
+  const [showDiscordWebhook, setShowDiscordWebhook] = useState(false);
   const [telegramForm, setTelegramForm] = useState({
     bot_token: "",
     chat_id: "",
     topic_id: "",
     enabled: false,
   });
+  const [showTelegramToken, setShowTelegramToken] = useState(false);
 
   // Profile
   const [displayName, setDisplayName] = useState(user?.display_name || "");
@@ -1166,17 +1168,31 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium text-nfs-muted mb-1.5">
                   Webhook URL
                 </label>
-                <input
-                  className={inputClass}
-                  value={discordForm.webhook_url}
-                  onChange={(e) =>
-                    setDiscordForm({
-                      ...discordForm,
-                      webhook_url: e.target.value,
-                    })
-                  }
-                  placeholder="https://discord.com/api/webhooks/..."
-                />
+                <div className="relative">
+                  <input
+                    className={inputClass + " pr-10"}
+                    type={showDiscordWebhook ? "text" : "password"}
+                    value={discordForm.webhook_url}
+                    onChange={(e) =>
+                      setDiscordForm({
+                        ...discordForm,
+                        webhook_url: e.target.value,
+                      })
+                    }
+                    placeholder="https://discord.com/api/webhooks/1234567890/aBcDeFgHiJkLmNoPqRsT"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscordWebhook(!showDiscordWebhook)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-nfs-muted hover:text-white transition-colors"
+                  >
+                    {showDiscordWebhook ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2">
                 <button
@@ -1231,18 +1247,31 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-nfs-muted mb-1.5">
                     Bot Token
                   </label>
-                  <input
-                    className={inputClass}
-                    type="password"
-                    value={telegramForm.bot_token}
-                    onChange={(e) =>
-                      setTelegramForm({
-                        ...telegramForm,
-                        bot_token: e.target.value,
-                      })
-                    }
-                    placeholder="123456:ABC..."
-                  />
+                  <div className="relative">
+                    <input
+                      className={inputClass + " pr-10"}
+                      type={showTelegramToken ? "text" : "password"}
+                      value={telegramForm.bot_token}
+                      onChange={(e) =>
+                        setTelegramForm({
+                          ...telegramForm,
+                          bot_token: e.target.value,
+                        })
+                      }
+                      placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTelegramToken(!showTelegramToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-nfs-muted hover:text-white transition-colors"
+                    >
+                      {showTelegramToken ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-nfs-muted mb-1.5">
@@ -1257,7 +1286,7 @@ export default function SettingsPage() {
                         chat_id: e.target.value,
                       })
                     }
-                    placeholder="-100..."
+                    placeholder="-1001234567890"
                   />
                 </div>
               </div>
@@ -1274,7 +1303,7 @@ export default function SettingsPage() {
                       topic_id: e.target.value,
                     })
                   }
-                  placeholder="Optional"
+                  placeholder="12345 (optional, for forum topics)"
                 />
               </div>
               <div className="flex gap-2">
