@@ -20,9 +20,9 @@ class NFSMount(Base):
     options: Mapped[str] = mapped_column(
         Text,
         default=(
-            "vers=4.2,proto=tcp,hard,nconnect=16,"
-            "rsize=1048576,wsize=1048576,"
-            "async,noatime,nocto,ac,actimeo=3600"
+            "rw,nfsvers=4.2,rsize=1048576,wsize=1048576,"
+            "hard,proto=tcp,nconnect=16,"
+            "timeo=600,retrans=2,noatime,async"
         ),
     )
     check_file: Mapped[str] = mapped_column(String(512), default="")

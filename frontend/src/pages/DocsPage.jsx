@@ -207,9 +207,9 @@ API_KEY=optional-api-key               # Optional API key`}</CodeBlock>
         </div>
         <h3 className="font-semibold text-white mt-3">Default NFS Options</h3>
         <CodeBlock>
-          {`vers=4.2,proto=tcp,hard,nconnect=16,
-rsize=1048576,wsize=1048576,
-async,noatime,nocto,ac,actimeo=3600`}
+          {`rw,nfsvers=4.2,rsize=1048576,wsize=1048576,
+hard,proto=tcp,nconnect=16,
+timeo=600,retrans=2,noatime,async`}
         </CodeBlock>
         <InfoBox type="info">
           <Code>nconnect=16</Code> creates 16 parallel TCP connections per mount
@@ -265,14 +265,12 @@ Sources: /mnt/disk1,/mnt/disk2,/mnt/disk3`}</CodeBlock>
           Default MergerFS Options
         </h3>
         <CodeBlock>
-          {`rw,use_ino,allow_other,
+          {`rw,use_ino,allow_other,statfs_ignore=nc,
 func.getattr=newest,category.action=all,
 category.create=ff,cache.files=partial,
-cache.readdir=true,cache.statfs=3600,
-cache.attr=120,cache.entry=120,
-cache.negative_entry=60,dropcacheonclose=true,
-kernel_cache,splice_move,splice_read,direct_io,
-minfreespace=10G,fsname=mergerfs`}
+dropcacheonclose=true,kernel_cache,
+splice_move,splice_read,direct_io,
+fsname=mergerfs`}
         </CodeBlock>
         <h3 className="font-semibold text-white mt-3">API Endpoints</h3>
         <CodeBlock>{`GET    /api/mergerfs/configs          # All configs

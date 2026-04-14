@@ -26,19 +26,17 @@ class Settings(BaseSettings):
 
     # Default NFS options optimized for 300+ concurrent streams
     default_nfs_options: str = (
-        "vers=4.2,proto=tcp,hard,nconnect=16,"
-        "rsize=1048576,wsize=1048576,"
-        "async,noatime,nocto,ac,actimeo=3600"
+        "rw,nfsvers=4.2,rsize=1048576,wsize=1048576,"
+        "hard,proto=tcp,nconnect=16,"
+        "timeo=600,retrans=2,noatime,async"
     )
 
     # Default MergerFS options optimized for streaming
     default_mergerfs_options: str = (
-        "rw,async_read=true,use_ino,allow_other,"
+        "rw,use_ino,allow_other,statfs_ignore=nc,"
         "func.getattr=newest,category.action=all,category.create=ff,"
-        "cache.files=auto-full,cache.readdir=true,"
-        "cache.statfs=3600,cache.attr=120,cache.entry=120,"
-        "cache.negative_entry=60,dropcacheonclose=true,"
-        "minfreespace=10G,fsname=mergerfs"
+        "cache.files=partial,dropcacheonclose=true,"
+        "kernel_cache,splice_move,splice_read,direct_io,fsname=mergerfs"
     )
 
     class Config:
