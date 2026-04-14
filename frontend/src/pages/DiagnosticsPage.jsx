@@ -380,7 +380,7 @@ export default function DiagnosticsPage() {
                       </span>
                     </div>
                   )}
-                  {diagnostics.rps_xps.xps !== undefined && (
+                  {diagnostics.rps_xps.xps != null && (
                     <div
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
                         diagnostics.rps_xps.xps_ok === null
@@ -402,7 +402,7 @@ export default function DiagnosticsPage() {
                       </span>
                     </div>
                   )}
-                  {diagnostics.rps_xps.xps === undefined && (
+                  {diagnostics.rps_xps.xps == null && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-nfs-input border-nfs-border">
                       <Info className="w-4 h-4 text-nfs-muted" />
                       <span className="text-xs font-mono text-nfs-muted">

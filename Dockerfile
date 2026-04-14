@@ -26,9 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     kmod \
     openresolv \
-    && rm -rf /var/lib/apt/lists/* \
-    && update-alternatives --set iptables /usr/sbin/iptables-legacy \
-    && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+    && rm -rf /var/lib/apt/lists/*
 
 # Enable FUSE for all users
 RUN echo "user_allow_other" >> /etc/fuse.conf

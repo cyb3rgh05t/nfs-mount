@@ -18,6 +18,24 @@ head() { echo -e "\n${BOLD}${CYAN}━━ $* ━━${RST}"; }
 
 head "NFS-MergerFS Manager - Starting Up"
 
+# ── Detect host iptables backend ──
+head "Firewall Backend"
+if nsenter -t 1 -m -n -- iptables-nft -S >/dev/null 2>&1; then
+    if update-alternatives --set iptables /usr/sbin/iptables-nft 2>/dev/null && \
+       update-alternatives --set ip6tables /usr/sbin/ip6tables-nft 2>/dev/null; then
+        log "Host uses ${CYAN}nf_tables${RST} — container iptables set to nft ${GREEN}✓${RST}"
+    else
+        log "Host uses ${CYAN}nf_tables${RST} — nft is already the default ${GREEN}✓${RST}"
+    fi
+else
+    if update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null && \
+       update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null; then
+        log "Host uses ${CYAN}legacy${RST} iptables — container set to legacy ${GREEN}✓${RST}"
+    else
+        log "Host uses ${CYAN}legacy${RST} iptables — legacy is already the default ${GREEN}✓${RST}"
+    fi
+fi
+
 # ── Kernel Tuning for 300+ Concurrent Streams ──
 head "Kernel Tuning"
 log "Applying kernel parameters for high-throughput NFS streaming..."
