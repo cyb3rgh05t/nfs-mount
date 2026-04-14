@@ -68,7 +68,11 @@ def _save_state() -> None:
 
 
 async def _check_nfs_mounts() -> None:
-    """Check all enabled NFS mounts and auto-recover if possible."""
+    """Check all enabled NFS mounts and auto-recover if possible.
+
+    NFS client mount notifications are suppressed — brief disconnects
+    are normal and long outages surface through MergerFS alerts instead.
+    """
     async with async_session() as db:
         result = await db.execute(
             select(NFSMount).where(NFSMount.enabled == True)  # noqa: E712
@@ -85,20 +89,9 @@ async def _check_nfs_mounts() -> None:
         prev = _prev_state.get(key)
 
         if _first_run and healthy:
-            # First check after startup: report online
             logger.info("NFS mount %s is online (startup check)", mount.name)
-            await send_alert(
-                "SUCCESS",
-                f"NFS Mount **{mount.name}** is **online**",
-                {
-                    "Server": mount.server_ip,
-                    "Local Path": mount.local_path,
-                    "Event": "Startup check",
-                },
-            )
 
         elif not healthy and (_first_run or prev is not False):
-            # Newly detected failure (first check or was healthy before)
             issues = []
             if not mounted:
                 issues.append("not mounted")
@@ -112,17 +105,8 @@ async def _check_nfs_mounts() -> None:
                 issues.append(f"server {mount.server_ip} unreachable")
 
             logger.warning("NFS mount %s unhealthy: %s", mount.name, ", ".join(issues))
-            await send_alert(
-                "ERROR",
-                f"NFS Mount **{mount.name}** is **offline**",
-                {
-                    "Server": mount.server_ip,
-                    "Local Path": mount.local_path,
-                    "Issues": ", ".join(issues),
-                },
-            )
 
-            # Auto-recovery attempt
+            # Auto-recovery attempt (silent — no notification)
             if mount.auto_mount and reachable:
                 logger.info("Auto-recovery: attempting to remount %s", mount.name)
                 try:
@@ -130,15 +114,6 @@ async def _check_nfs_mounts() -> None:
                     if r.get("success"):
                         logger.info(
                             "Auto-recovery: %s remounted successfully", mount.name
-                        )
-                        await send_alert(
-                            "SUCCESS",
-                            f"NFS Mount **{mount.name}** auto-recovered",
-                            {
-                                "Server": mount.server_ip,
-                                "Local Path": mount.local_path,
-                                "Action": "Automatic remount",
-                            },
                         )
                         healthy = True
                     else:
@@ -151,14 +126,7 @@ async def _check_nfs_mounts() -> None:
                     logger.exception("Auto-recovery: remount %s exception", mount.name)
 
         elif not _first_run and prev is False and healthy:
-            await send_alert(
-                "SUCCESS",
-                f"NFS Mount **{mount.name}** is back **online**",
-                {
-                    "Server": mount.server_ip,
-                    "Local Path": mount.local_path,
-                },
-            )
+            logger.info("NFS mount %s recovered", mount.name)
 
         _prev_state[key] = healthy
 
