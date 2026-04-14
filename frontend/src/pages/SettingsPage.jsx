@@ -56,6 +56,7 @@ import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
 import InfoBox from "../components/InfoBox";
 import ProgressDialog from "../components/ProgressDialog";
+import CustomSelect from "../components/CustomSelect";
 
 const inputClass =
   "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
@@ -1351,43 +1352,41 @@ export default function SettingsPage() {
                   <span className="text-xs text-nfs-text flex-1 min-w-0">
                     Log Level
                   </span>
-                  <select
-                    className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                  <CustomSelect
                     value={appSettings.log_level}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       setAppSettings((prev) => ({
                         ...prev,
-                        log_level: e.target.value,
+                        log_level: val,
                       }))
                     }
-                  >
-                    {(appSettings.valid_log_levels || []).map((lvl) => (
-                      <option key={lvl} value={lvl}>
-                        {lvl}
-                      </option>
-                    ))}
-                  </select>
+                    options={(appSettings.valid_log_levels || []).map(
+                      (lvl) => ({
+                        value: lvl,
+                        label: lvl,
+                      }),
+                    )}
+                    className="w-52"
+                  />
                 </div>
                 <div className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2">
                   <span className="text-xs text-nfs-text flex-1 min-w-0">
                     Timezone
                   </span>
-                  <select
-                    className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                  <CustomSelect
                     value={appSettings.timezone}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       setAppSettings((prev) => ({
                         ...prev,
-                        timezone: e.target.value,
+                        timezone: val,
                       }))
                     }
-                  >
-                    {(appSettings.valid_timezones || []).map((tz) => (
-                      <option key={tz} value={tz}>
-                        {tz}
-                      </option>
-                    ))}
-                  </select>
+                    options={(appSettings.valid_timezones || []).map((tz) => ({
+                      value: tz,
+                      label: tz,
+                    }))}
+                    className="w-52"
+                  />
                 </div>
               </div>
             ) : (
