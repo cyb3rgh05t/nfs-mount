@@ -596,7 +596,7 @@ async def update_app_settings(data: dict, db: AsyncSession) -> dict:
             return {"success": False, "error": f"Invalid timezone: {tz}"}
         os.environ["TZ"] = tz
         try:
-            time.tzset()
+            time.tzset()  # type: ignore[attr-defined]
         except AttributeError:
             pass  # Windows doesn't have tzset
         await _save_setting(db, "app", "timezone", tz)
@@ -621,7 +621,7 @@ async def apply_saved_app_settings(db: AsyncSession):
     if "timezone" in saved:
         os.environ["TZ"] = saved["timezone"]
         try:
-            time.tzset()
+            time.tzset()  # type: ignore[attr-defined]
         except AttributeError:
             pass
         logger.info("Restored timezone: %s", saved["timezone"])
