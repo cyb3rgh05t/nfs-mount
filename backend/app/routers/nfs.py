@@ -444,9 +444,19 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
             }
         )
 
-    # 2) /etc/exports file content – read via nsenter to get the real host file
+    # 2) /etc/exports – read via multiple methods to compare
     exports_path = "/etc/exports"
     exports_content = ""
+    exports_methods = {}
+
+    # Method A: direct read (works if bind-mounted)
+    try:
+        with open("/etc/exports", "r") as f:
+            exports_methods["direct_read"] = f.read()
+    except Exception as e:
+        exports_methods["direct_read"] = f"[ERROR: {e}]"
+
+    # Method B: nsenter cat (reads from host mount namespace)
     try:
         r = subprocess.run(
             ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--", "cat", "/etc/exports"],
@@ -454,15 +464,42 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
             text=True,
             timeout=10,
         )
-        if r.returncode == 0:
-            exports_content = r.stdout
-            exports_path = "/etc/exports (via nsenter)"
-        else:
-            exports_content = (
-                f"[nsenter cat failed rc={r.returncode}: {r.stderr.strip()}]"
-            )
+        exports_methods["nsenter_cat"] = (
+            r.stdout
+            if r.returncode == 0
+            else f"[ERROR rc={r.returncode}: {r.stderr.strip()}]"
+        )
     except Exception as e:
-        exports_content = f"[ERROR: {e}]"
+        exports_methods["nsenter_cat"] = f"[ERROR: {e}]"
+
+    # Method C: /proc/1/root/ path
+    try:
+        if os.path.isfile("/proc/1/root/etc/exports"):
+            with open("/proc/1/root/etc/exports", "r") as f:
+                exports_methods["proc1root"] = f.read()
+        else:
+            exports_methods["proc1root"] = "[FILE NOT FOUND]"
+    except Exception as e:
+        exports_methods["proc1root"] = f"[ERROR: {e}]"
+
+    # Use direct read as primary (works when bind-mounted)
+    # Check if bind-mounted
+    bind_mounted = False
+    try:
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                if " /etc/exports " in line:
+                    bind_mounted = True
+                    break
+    except Exception:
+        pass
+
+    if bind_mounted:
+        exports_content = exports_methods.get("direct_read", "")
+        exports_path = "/etc/exports (bind-mounted)"
+    else:
+        exports_content = exports_methods.get("nsenter_cat", "")
+        exports_path = "/etc/exports (via nsenter)"
 
     # 3) exportfs -v output (use nsenter to query host NFS export table)
     exportfs_cmd = [
@@ -628,6 +665,8 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
 
     return {
         "exports_path_used": exports_path,
+        "exports_bind_mounted": bind_mounted,
+        "exports_read_methods": exports_methods,
         "db_exports": db_exports,
         "etc_exports_content": exports_content,
         "etc_exports_d": exports_d,

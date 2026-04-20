@@ -168,10 +168,14 @@ fi
 
 # ── Detect host /etc/exports access ──
 HOST_EXPORTS="/proc/1/root/etc/exports"
-if [ -f "$HOST_EXPORTS" ]; then
+if grep -q ' /etc/exports ' /proc/mounts 2>/dev/null; then
+    log "Host /etc/exports ${GREEN}bind-mounted${RST} into container ${GREEN}✓${RST}"
+elif [ -f "$HOST_EXPORTS" ]; then
     log "Host /etc/exports accessible via ${CYAN}$HOST_EXPORTS${RST} ${GREEN}✓${RST}"
+    warn "Bind-mount recommended: add ${CYAN}- /etc/exports:/etc/exports${RST} to docker-compose volumes"
 else
-    warn "Host /etc/exports NOT accessible — will use container-local /etc/exports"
+    warn "Host /etc/exports NOT accessible — NFS export management will not work"
+    warn "Add ${CYAN}- /etc/exports:/etc/exports${RST} to docker-compose volumes"
 fi
 
 # ── Clean stale mounts & ensure directories ──

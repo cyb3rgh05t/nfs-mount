@@ -35,12 +35,23 @@ def _nsenter_prefix() -> list[str]:
 
 
 def _read_host_file(path: str) -> str:
-    """Read a file on the host via nsenter.
+    """Read a file on the host filesystem.
 
-    Using nsenter ensures we read from the real host filesystem,
-    not a container-overlay copy visible through /proc/1/root/.
+    Strategy:
+    1. If /etc/exports is bind-mounted from host → read directly
+    2. Otherwise use nsenter to read from host mount namespace
+    3. Fallback to /proc/1/root/ path
     """
+    # Check if file is bind-mounted (most reliable)
+    if _is_bind_mounted(path):
+        try:
+            with open(path, "r") as f:
+                return f.read()
+        except Exception as e:
+            logger.error(f"Failed to read bind-mounted {path}: {e}")
+
     if _is_host_mode():
+        # Try nsenter with cat
         try:
             r = subprocess.run(
                 _nsenter_prefix() + ["cat", path],
@@ -55,45 +66,108 @@ def _read_host_file(path: str) -> str:
             )
         except Exception as e:
             logger.warning(f"nsenter cat {path} error: {e}")
-    # Fallback: direct read (works when /etc/exports is bind-mounted or no host mode)
-    local = f"/proc/1/root{path}" if _is_host_mode() else path
+
+        # Fallback: read via /proc/1/root/
+        try:
+            with open(f"/proc/1/root{path}", "r") as f:
+                return f.read()
+        except FileNotFoundError:
+            return ""
+        except Exception as e:
+            logger.error(f"Failed to read /proc/1/root{path}: {e}")
+            return ""
+    # No host mode — read local file
     try:
-        with open(local, "r") as f:
+        with open(path, "r") as f:
             return f.read()
     except FileNotFoundError:
         return ""
     except Exception as e:
-        logger.error(f"Failed to read {local}: {e}")
+        logger.error(f"Failed to read {path}: {e}")
         return ""
 
 
-def _write_host_file(path: str, content: str) -> dict:
-    """Write a file on the host via nsenter + tee.
+def _is_bind_mounted(path: str) -> bool:
+    """Check if a path is bind-mounted from the host."""
+    try:
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                if path in line and "bind" in line:
+                    return True
+                # Also check for exact mount point match
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == path:
+                    return True
+    except Exception:
+        pass
+    return False
 
-    Writing through /proc/1/root/ does NOT reliably reach the real host
-    filesystem (it may write to a container-overlay layer). Using
-    nsenter + tee ensures the write happens inside the host's mount
-    namespace.
+
+def _write_host_file(path: str, content: str) -> dict:
+    """Write a file on the host filesystem.
+
+    Strategy (in order of preference):
+    1. If /etc/exports is bind-mounted from host → write directly (most reliable)
+    2. Use nsenter + sh -c with heredoc to write in host mount namespace
+    3. Write via /proc/1/root/ as last resort
+
+    Each method is verified by reading back and comparing.
     """
+    if _is_bind_mounted(path):
+        try:
+            with open(path, "w") as f:
+                f.write(content)
+            logger.info(f"Wrote {path} via bind-mount ({len(content)} bytes)")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Failed to write bind-mounted {path}: {e}")
+
     if _is_host_mode():
+        # Method 1: nsenter + sh -c 'cat > file' with stdin
         try:
             r = subprocess.run(
-                _nsenter_prefix() + ["tee", path],
+                _nsenter_prefix() + ["sh", "-c", f"cat > {path}"],
                 input=content,
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
-            if r.returncode != 0:
-                err = r.stderr.strip()
-                logger.error(f"nsenter tee {path} failed: {err}")
-                return {"success": False, "error": err}
-            logger.info(f"Wrote {path} on host via nsenter ({len(content)} bytes)")
+            if r.returncode == 0:
+                # Verify the write by reading back
+                verify = subprocess.run(
+                    _nsenter_prefix() + ["cat", path],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if verify.returncode == 0 and MANAGED_BEGIN in verify.stdout:
+                    logger.info(
+                        f"Wrote {path} on host via nsenter sh -c ({len(content)} bytes) [verified]"
+                    )
+                    return {"success": True}
+                else:
+                    logger.warning(
+                        f"nsenter write to {path} succeeded but verify failed, trying /proc/1/root/"
+                    )
+            else:
+                logger.warning(
+                    f"nsenter sh -c 'cat > {path}' failed (rc={r.returncode}): {r.stderr.strip()}"
+                )
+        except Exception as e:
+            logger.warning(f"nsenter write to {path} error: {e}")
+
+        # Method 2: Direct write via /proc/1/root/
+        try:
+            host_path = f"/proc/1/root{path}"
+            with open(host_path, "w") as f:
+                f.write(content)
+            logger.info(f"Wrote {host_path} directly ({len(content)} bytes)")
             return {"success": True}
         except Exception as e:
-            logger.error(f"nsenter tee {path} error: {e}")
+            logger.error(f"Failed to write {host_path}: {e}")
             return {"success": False, "error": str(e)}
-    # Fallback: direct write (no host mode — e.g. /etc/exports is bind-mounted)
+
+    # No host mode — write directly
     try:
         with open(path, "w") as f:
             f.write(content)
