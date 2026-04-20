@@ -19,15 +19,9 @@ MANAGED_BEGIN = "# --- NFS-Manager BEGIN ---"
 MANAGED_END = "# --- NFS-Manager END ---"
 
 
-def _get_exports_path() -> str:
-    """Return the effective /etc/exports path.
-
-    Prefers the host file via /proc/1/root (privileged container) so edits
-    affect the host NFS server directly.
-    """
-    if os.path.isfile(HOST_EXPORTS_FILE):
-        return HOST_EXPORTS_FILE
-    return EXPORTS_FILE
+def _is_host_mode() -> bool:
+    """Return True if we can reach the host's /etc/exports via /proc/1/root."""
+    return os.path.isfile(HOST_EXPORTS_FILE)
 
 
 def _nsenter_prefix() -> list[str]:
@@ -40,10 +34,79 @@ def _nsenter_prefix() -> list[str]:
     return ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--"]
 
 
+def _read_host_file(path: str) -> str:
+    """Read a file on the host via nsenter.
+
+    Using nsenter ensures we read from the real host filesystem,
+    not a container-overlay copy visible through /proc/1/root/.
+    """
+    if _is_host_mode():
+        try:
+            r = subprocess.run(
+                _nsenter_prefix() + ["cat", path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if r.returncode == 0:
+                return r.stdout
+            logger.warning(
+                f"nsenter cat {path} failed (rc={r.returncode}): {r.stderr.strip()}"
+            )
+        except Exception as e:
+            logger.warning(f"nsenter cat {path} error: {e}")
+    # Fallback: direct read (works when /etc/exports is bind-mounted or no host mode)
+    local = f"/proc/1/root{path}" if _is_host_mode() else path
+    try:
+        with open(local, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+    except Exception as e:
+        logger.error(f"Failed to read {local}: {e}")
+        return ""
+
+
+def _write_host_file(path: str, content: str) -> dict:
+    """Write a file on the host via nsenter + tee.
+
+    Writing through /proc/1/root/ does NOT reliably reach the real host
+    filesystem (it may write to a container-overlay layer). Using
+    nsenter + tee ensures the write happens inside the host's mount
+    namespace.
+    """
+    if _is_host_mode():
+        try:
+            r = subprocess.run(
+                _nsenter_prefix() + ["tee", path],
+                input=content,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if r.returncode != 0:
+                err = r.stderr.strip()
+                logger.error(f"nsenter tee {path} failed: {err}")
+                return {"success": False, "error": err}
+            logger.info(f"Wrote {path} on host via nsenter ({len(content)} bytes)")
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"nsenter tee {path} error: {e}")
+            return {"success": False, "error": str(e)}
+    # Fallback: direct write (no host mode — e.g. /etc/exports is bind-mounted)
+    try:
+        with open(path, "w") as f:
+            f.write(content)
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Failed to write {path}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def _exportfs_cmd(args: list[str]) -> list[str]:
     """Build an exportfs command, using nsenter into the host namespaces
     when running in a privileged container."""
-    if os.path.isfile(HOST_EXPORTS_FILE):
+    if _is_host_mode():
         return _nsenter_prefix() + ["exportfs"] + args
     return ["exportfs"] + args
 
@@ -94,13 +157,9 @@ async def write_exports_file(
 
     logger.info(f"write_exports_file: {len(export_lines)} export lines to write")
 
-    exports_path = _get_exports_path()
-
     # Read existing file (preserve non-managed content)
-    existing_lines: list[str] = []
-    if os.path.isfile(exports_path):
-        with open(exports_path, "r") as f:
-            existing_lines = f.readlines()
+    existing_content = _read_host_file(EXPORTS_FILE)
+    existing_lines = existing_content.splitlines(keepends=True)
 
     # Remove old managed block
     new_lines: list[str] = []
@@ -124,17 +183,14 @@ async def write_exports_file(
 
     # Combine
     final = new_lines + ["\n"] + managed
+    content = "".join(final)
 
-    try:
-        with open(exports_path, "w") as f:
-            f.writelines(final)
+    result = _write_host_file(EXPORTS_FILE, content)
+    if result["success"]:
         logger.info(
-            f"write_exports_file: wrote {len(export_lines)} exports to {exports_path}"
+            f"write_exports_file: wrote {len(export_lines)} exports to host /etc/exports"
         )
-        return {"success": True}
-    except Exception as e:
-        logger.error(f"Failed to write {exports_path}: {e}")
-        return {"success": False, "error": str(e)}
+    return result
 
 
 async def apply_exports() -> dict:
@@ -319,36 +375,48 @@ def get_system_exports() -> list[dict]:
     """Parse /etc/exports and /etc/exports.d/*.exports for non-managed entries."""
     entries = []
 
-    # Determine host-aware base path
-    if os.path.isfile(HOST_EXPORTS_FILE):
-        base = "/proc/1/root"
-    else:
-        base = ""
-
-    # Parse main /etc/exports
-    main_path = f"{base}/etc/exports"
-    if os.path.isfile(main_path):
-        try:
-            with open(main_path, "r") as f:
-                entries.extend(_parse_exports_lines(f, source="system"))
-        except Exception as e:
-            logger.error(f"Failed to parse {main_path}: {e}")
+    # Parse main /etc/exports via nsenter (reads real host file)
+    content = _read_host_file(EXPORTS_FILE)
+    if content:
+        entries.extend(_parse_exports_lines(content.splitlines(), source="system"))
 
     # Parse /etc/exports.d/*.exports
-    exports_d = f"{base}/etc/exports.d"
-    if os.path.isdir(exports_d):
+    if _is_host_mode():
+        # List files in host's /etc/exports.d/ via nsenter
         try:
-            for fname in sorted(os.listdir(exports_d)):
-                if not fname.endswith(".exports"):
-                    continue
-                fpath = os.path.join(exports_d, fname)
-                if os.path.isfile(fpath):
-                    with open(fpath, "r") as f:
-                        entries.extend(
-                            _parse_exports_lines(f, source=f"system ({fname})")
+            r = subprocess.run(
+                _nsenter_prefix()
+                + ["sh", "-c", "ls /etc/exports.d/*.exports 2>/dev/null"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            for fpath in r.stdout.strip().splitlines():
+                fname = os.path.basename(fpath)
+                fcontent = _read_host_file(fpath)
+                if fcontent:
+                    entries.extend(
+                        _parse_exports_lines(
+                            fcontent.splitlines(), source=f"system ({fname})"
                         )
+                    )
         except Exception as e:
-            logger.error(f"Failed to parse {exports_d}: {e}")
+            logger.error(f"Failed to list /etc/exports.d: {e}")
+    else:
+        exports_d = "/etc/exports.d"
+        if os.path.isdir(exports_d):
+            try:
+                for fname in sorted(os.listdir(exports_d)):
+                    if not fname.endswith(".exports"):
+                        continue
+                    fpath = os.path.join(exports_d, fname)
+                    if os.path.isfile(fpath):
+                        with open(fpath, "r") as f:
+                            entries.extend(
+                                _parse_exports_lines(f, source=f"system ({fname})")
+                            )
+            except Exception as e:
+                logger.error(f"Failed to parse {exports_d}: {e}")
 
     return entries
 

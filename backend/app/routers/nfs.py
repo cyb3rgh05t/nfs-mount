@@ -444,25 +444,39 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
             }
         )
 
-    # 2) /etc/exports file content (prefer host file via /proc/1/root)
-    host_exports = "/proc/1/root/etc/exports"
-    exports_path = host_exports if os.path.isfile(host_exports) else "/etc/exports"
+    # 2) /etc/exports file content – read via nsenter to get the real host file
+    exports_path = "/etc/exports"
     exports_content = ""
     try:
-        if os.path.isfile(exports_path):
-            with open(exports_path, "r") as f:
-                exports_content = f.read()
+        r = subprocess.run(
+            ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--", "cat", "/etc/exports"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if r.returncode == 0:
+            exports_content = r.stdout
+            exports_path = "/etc/exports (via nsenter)"
         else:
-            exports_content = "[FILE DOES NOT EXIST]"
+            exports_content = (
+                f"[nsenter cat failed rc={r.returncode}: {r.stderr.strip()}]"
+            )
     except Exception as e:
-        exports_content = f"[READ ERROR: {e}]"
+        exports_content = f"[ERROR: {e}]"
 
-    # 3) exportfs -v output (use nsenter with full namespaces if host file available)
-    exportfs_cmd = (
-        ["nsenter", "-t", "1", "-m", "-p", "-n", "-i", "--", "exportfs", "-v"]
-        if os.path.isfile(host_exports)
-        else ["exportfs", "-v"]
-    )
+    # 3) exportfs -v output (use nsenter to query host NFS export table)
+    exportfs_cmd = [
+        "nsenter",
+        "-t",
+        "1",
+        "-m",
+        "-p",
+        "-n",
+        "-i",
+        "--",
+        "exportfs",
+        "-v",
+    ]
     try:
         r = subprocess.run(exportfs_cmd, capture_output=True, text=True, timeout=10)
         exportfs_output = r.stdout.strip() or "(empty)"
@@ -555,24 +569,62 @@ async def debug_exports(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         nfs_port_status = f"[ERROR: {e}]"
 
-    # 9) /etc/exports.d/ contents (host-aware)
-    exports_d_path = (
-        "/proc/1/root/etc/exports.d"
-        if os.path.isfile(host_exports)
-        else "/etc/exports.d"
-    )
+    # 9) /etc/exports.d/ contents (via nsenter)
     exports_d = {}
-    if os.path.isdir(exports_d_path):
-        try:
-            for fname in sorted(os.listdir(exports_d_path)):
-                fpath = os.path.join(exports_d_path, fname)
-                if os.path.isfile(fpath):
-                    with open(fpath, "r") as f:
-                        exports_d[fname] = f.read()
-        except Exception as e:
-            exports_d["_error"] = str(e)
-    else:
-        exports_d["_status"] = f"{exports_d_path} does not exist"
+    try:
+        r = subprocess.run(
+            [
+                "nsenter",
+                "-t",
+                "1",
+                "-m",
+                "-p",
+                "-n",
+                "-i",
+                "--",
+                "sh",
+                "-c",
+                "if [ -d /etc/exports.d ]; then ls /etc/exports.d/ 2>/dev/null; else echo __NODIR__; fi",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if r.returncode == 0 and "__NODIR__" in r.stdout:
+            exports_d["_status"] = "/etc/exports.d does not exist"
+        elif r.returncode == 0:
+            for fname in r.stdout.strip().splitlines():
+                if not fname:
+                    continue
+                try:
+                    fr = subprocess.run(
+                        [
+                            "nsenter",
+                            "-t",
+                            "1",
+                            "-m",
+                            "-p",
+                            "-n",
+                            "-i",
+                            "--",
+                            "cat",
+                            f"/etc/exports.d/{fname}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    exports_d[fname] = (
+                        fr.stdout
+                        if fr.returncode == 0
+                        else f"[READ ERROR: {fr.stderr.strip()}]"
+                    )
+                except Exception as e:
+                    exports_d[fname] = f"[ERROR: {e}]"
+        else:
+            exports_d["_error"] = r.stderr.strip()
+    except Exception as e:
+        exports_d["_error"] = str(e)
 
     return {
         "exports_path_used": exports_path,
