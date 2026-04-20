@@ -25,6 +25,28 @@ import CustomSelect from "../components/CustomSelect";
 const DEFAULT_MOUNT_OPTIONS =
   "rw,nfsvers=4.2,rsize=1048576,wsize=1048576,hard,proto=tcp,nconnect=16,timeo=600,retrans=2,noatime,async";
 
+const BLOCK_SIZE_OPTIONS = [
+  { value: "1048576", label: "1 MB (default)" },
+  { value: "2097152", label: "2 MB" },
+  { value: "4194304", label: "4 MB (recommended 10GbE+)" },
+];
+
+function getBlockSizeFromOptions(options) {
+  const match = options.match(/rsize=(\d+)/);
+  return match ? match[1] : "1048576";
+}
+
+function updateBlockSizeInOptions(options, newSize) {
+  let updated = options.replace(/rsize=\d+/, `rsize=${newSize}`);
+  updated = updated.replace(/wsize=\d+/, `wsize=${newSize}`);
+  return updated;
+}
+
+function formatBlockSize(bytes) {
+  const mb = parseInt(bytes) / (1024 * 1024);
+  return mb >= 1 ? `${mb} MB` : `${parseInt(bytes) / 1024} KB`;
+}
+
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -406,8 +428,8 @@ export default function NFSClientPage() {
       {/* NFS Options Info */}
       <InfoBox type="primary" className="mb-6">
         <strong>Streaming-Optimized:</strong> NFSv4.2 with nconnect=16 (16
-        parallel TCP connections), 1MB R/W Buffer, noatime, async — optimized
-        for 300+ simultaneous streams.
+        parallel TCP connections), configurable R/W Block Size (1–4 MB),
+        noatime, async — optimized for 300+ simultaneous streams.
       </InfoBox>
 
       {mounts.length === 0 ? (
@@ -452,6 +474,13 @@ export default function NFSClientPage() {
                       </span>
                       <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-blue-500/15 text-blue-400 border-blue-500/30">
                         NFSv{m.nfs_version}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                        {formatBlockSize(
+                          getBlockSizeFromOptions(
+                            m.options || DEFAULT_MOUNT_OPTIONS,
+                          ),
+                        )}
                       </span>
                       {m.auto_mount ? (
                         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
@@ -649,6 +678,21 @@ export default function NFSClientPage() {
               onChange={(e) => setForm({ ...form, local_path: e.target.value })}
               placeholder="/mnt/storage"
             />
+          </Field>
+          <Field label="Block Size (rsize/wsize)">
+            <CustomSelect
+              value={getBlockSizeFromOptions(form.options)}
+              onChange={(val) =>
+                setForm({
+                  ...form,
+                  options: updateBlockSizeInOptions(form.options, val),
+                })
+              }
+              options={BLOCK_SIZE_OPTIONS}
+            />
+            <p className="text-[10px] text-nfs-muted mt-1">
+              Sets rsize and wsize — use 4 MB only with 10GbE+ networks
+            </p>
           </Field>
           <Field label="Mount Options">
             <textarea

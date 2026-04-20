@@ -12,3 +12,4 @@ frontend/dist/
 .DS_Store
 config/wg0.conf
 data/
+.vs/
