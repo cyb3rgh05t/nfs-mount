@@ -26,9 +26,7 @@ const DEFAULT_MOUNT_OPTIONS =
   "rw,nfsvers=4.2,rsize=1048576,wsize=1048576,hard,proto=tcp,nconnect=16,timeo=600,retrans=2,noatime,async";
 
 const BLOCK_SIZE_OPTIONS = [
-  { value: "1048576", label: "1 MB (default)" },
-  { value: "2097152", label: "2 MB" },
-  { value: "4194304", label: "4 MB (recommended 10GbE+)" },
+  { value: "1048576", label: "1 MB (max supported)" },
 ];
 
 function getBlockSizeFromOptions(options) {
