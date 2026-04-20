@@ -745,7 +745,11 @@ export default function DashboardPage() {
                           label={qdisc ? `QDisc ${qdisc}` : "QDisc Not Set"}
                         />
                         <Badge
-                          active={dirtyRatio && parseInt(dirtyRatio) >= 30}
+                          active={
+                            dirtyRatio &&
+                            parseInt(dirtyRatio) >= 5 &&
+                            parseInt(dirtyRatio) <= 40
+                          }
                           label={
                             dirtyRatio
                               ? `Dirty ${dirtyRatio}%`

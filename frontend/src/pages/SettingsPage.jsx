@@ -152,6 +152,7 @@ export default function SettingsPage() {
     "settings-nfsthreads",
     null,
   );
+  const [zfsTuning, setZfsTuning] = useCachedState("settings-zfs", null);
   const [appSettings, setAppSettings] = useCachedState("settings-app", null);
   const [apiKeys, setApiKeys] = useCachedState("settings-apikeys", []);
   const [sshKeys, setSSHKeys] = useCachedState("settings-sshkeys", []);
@@ -215,6 +216,7 @@ export default function SettingsPage() {
         fwStatus,
         nfsT,
         appS,
+        zfs,
       ] = await Promise.all([
         api.getNotificationConfigs().catch(() => []),
         api.getKernelParams().catch(() => []),
@@ -225,6 +227,7 @@ export default function SettingsPage() {
         api.getFirewallStatus().catch(() => null),
         api.getNfsThreads().catch(() => null),
         api.getAppSettings().catch(() => null),
+        api.getZfsTuning().catch(() => null),
       ]);
       setConfigs(notifs);
       setKernelParams(params);
@@ -235,6 +238,7 @@ export default function SettingsPage() {
       setFirewallStatus(fwStatus);
       setNfsThreads(nfsT);
       setAppSettings(appS);
+      setZfsTuning(zfs);
 
       const discord = notifs.find((n) => n.type === "discord");
       if (discord) {
@@ -607,6 +611,54 @@ export default function SettingsPage() {
     } catch (e) {
       toast.error(e.message);
     }
+  };
+
+  // ZFS tuning helpers
+  const updateZfsParam = (index, value) => {
+    setZfsTuning((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev.params];
+      updated[index] = { ...updated[index], value };
+      return { ...prev, params: updated };
+    });
+  };
+
+  const applyZfsTuning = async () => {
+    if (!zfsTuning?.params) return;
+    try {
+      const results = await api.applyZfsTuning(zfsTuning.params);
+      const ok = results.filter((r) => r.success).length;
+      const fail = results.filter((r) => !r.success).length;
+      if (fail === 0) {
+        toast.success(`All ${ok} ZFS parameters applied & persisted`);
+      } else {
+        toast.error(`${ok} applied, ${fail} failed`);
+      }
+      const fresh = await api.getZfsTuning().catch(() => null);
+      setZfsTuning(fresh);
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const refreshZfsTuning = async () => {
+    try {
+      const data = await api.getZfsTuning();
+      setZfsTuning(data);
+      toast.success("ZFS tuning refreshed");
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const formatBytes = (bytes) => {
+    if (!bytes || bytes === "0") return "0";
+    const n = parseInt(bytes);
+    if (isNaN(n)) return bytes;
+    if (n >= 1073741824) return `${(n / 1073741824).toFixed(1)} GB`;
+    if (n >= 1048576) return `${(n / 1048576).toFixed(0)} MB`;
+    if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${n} B`;
   };
 
   return (
@@ -1620,6 +1672,114 @@ export default function SettingsPage() {
             ) : (
               <p className="text-sm text-nfs-muted">
                 No network interface detected
+              </p>
+            )}
+          </div>
+
+          {/* ZFS ARC Tuning */}
+          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    ZFS ARC Tuning
+                  </h2>
+                  <p className="text-xs text-nfs-muted">
+                    ZFS Adaptive Replacement Cache &amp; I/O parameters
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={refreshZfsTuning}
+                  className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                  title="Reload current values"
+                >
+                  <RefreshCw className="w-4 h-4 text-nfs-primary" />
+                  Refresh
+                </button>
+                <button
+                  onClick={applyZfsTuning}
+                  className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                >
+                  <Zap className="w-4 h-4 text-nfs-primary" />
+                  Apply &amp; Persist
+                </button>
+              </div>
+            </div>
+
+            {zfsTuning?.available ? (
+              <>
+                {/* ARC Stats Summary */}
+                {zfsTuning.arc_stats?.size && (
+                  <div className="flex gap-3 mb-4">
+                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                        ARC Size
+                      </p>
+                      <p className="text-sm font-semibold text-purple-400 font-mono">
+                        {formatBytes(zfsTuning.arc_stats.size)}
+                      </p>
+                    </div>
+                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                        ARC Max
+                      </p>
+                      <p className="text-sm font-semibold text-purple-400 font-mono">
+                        {formatBytes(zfsTuning.arc_stats.c_max)}
+                      </p>
+                    </div>
+                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                        Hit Rate
+                      </p>
+                      <p className="text-sm font-semibold text-green-400 font-mono">
+                        {zfsTuning.arc_stats.hits && zfsTuning.arc_stats.misses
+                          ? `${((zfsTuning.arc_stats.hits / (zfsTuning.arc_stats.hits + zfsTuning.arc_stats.misses)) * 100).toFixed(1)}%`
+                          : "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Editable params */}
+                <div className="space-y-1">
+                  {zfsTuning.params.map((p, i) => (
+                    <div
+                      key={p.name}
+                      className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2"
+                    >
+                      <code className="text-xs text-nfs-text font-mono flex-1 min-w-0">
+                        {p.name}
+                      </code>
+                      <span className="text-[10px] text-nfs-muted whitespace-nowrap">
+                        {p.name.includes("arc_max") ||
+                        p.name.includes("arc_min") ||
+                        p.name.includes("distance")
+                          ? formatBytes(p.value)
+                          : ""}
+                      </span>
+                      <input
+                        className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                        value={p.value}
+                        onChange={(e) => updateZfsParam(i, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-nfs-muted mt-2 px-1">
+                  Values are applied live and persisted to{" "}
+                  <code>/etc/modprobe.d/zfs.conf</code> + initramfs. ARC max/min
+                  in bytes (e.g. 214748364800 = 200 GB). Changes take effect
+                  immediately.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-nfs-muted">
+                ZFS module not loaded — ZFS tuning not available on this system.
               </p>
             )}
           </div>

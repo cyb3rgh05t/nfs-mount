@@ -13,3 +13,5 @@ frontend/dist/
 config/wg0.conf
 data/
 .vs/
+scripts/optimize-storage150.sh
+scripts/optimize-storage300.sh

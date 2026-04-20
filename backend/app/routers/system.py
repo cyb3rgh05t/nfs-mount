@@ -95,6 +95,19 @@ async def diagnostics():
     return await system_service.get_diagnostics()
 
 
+@router.get("/zfs-tuning")
+async def get_zfs_tuning():
+    return system_service.get_zfs_params()
+
+
+@router.post("/zfs-tuning")
+async def apply_zfs_tuning(data: dict, db: AsyncSession = Depends(get_db)):
+    params = data.get("params", [])
+    persist = data.get("persist", True)
+    logger.info("Applying ZFS tuning: %d params (persist=%s)", len(params), persist)
+    return await system_service.apply_zfs_tuning(params, persist=persist, db=db)
+
+
 @router.get("/app-settings")
 async def get_app_settings(db: AsyncSession = Depends(get_db)):
     return await system_service.get_app_settings(db)

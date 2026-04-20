@@ -484,6 +484,150 @@ async def set_nfs_threads(count: int) -> dict:
         return {"success": False, "error": str(e)}
 
 
+# ── ZFS Tuning ───────────────────────────────────────────────────────────────
+
+# Parameters exposed in the UI (path under /sys/module/zfs/parameters/)
+_ZFS_PARAMS = [
+    "zfs_arc_max",
+    "zfs_arc_min",
+    "zfetch_max_distance",
+    "zfs_vdev_async_read_max_active",
+    "zfs_vdev_async_write_max_active",
+    "zfs_txg_timeout",
+]
+
+
+def get_zfs_params() -> dict:
+    """Read current ZFS module parameters from sysfs."""
+    base = "/sys/module/zfs/parameters"
+    if not os.path.isdir(base):
+        return {"available": False, "params": [], "arc_stats": {}}
+
+    params = []
+    for name in _ZFS_PARAMS:
+        path = os.path.join(base, name)
+        try:
+            with open(path, "r") as f:
+                params.append({"name": name, "value": f.read().strip()})
+        except Exception:
+            params.append({"name": name, "value": "N/A"})
+
+    # Read ARC stats from /proc/spl/kstat/zfs/arcstats
+    arc_stats = {}
+    try:
+        with open("/proc/spl/kstat/zfs/arcstats", "r") as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 3 and parts[0] in (
+                    "size",
+                    "c_max",
+                    "c_min",
+                    "hits",
+                    "misses",
+                ):
+                    arc_stats[parts[0]] = int(parts[2])
+    except Exception:
+        pass
+
+    return {"available": True, "params": params, "arc_stats": arc_stats}
+
+
+async def apply_zfs_tuning(
+    params: list[dict], persist: bool = True, db: AsyncSession | None = None
+) -> list[dict]:
+    """Apply ZFS tuning parameters and optionally persist to /etc/modprobe.d/zfs.conf."""
+    base = "/sys/module/zfs/parameters"
+    if not os.path.isdir(base):
+        return [{"name": "zfs", "success": False, "error": "ZFS module not loaded"}]
+
+    allowed = set(_ZFS_PARAMS)
+    results = []
+
+    for p in params:
+        name = p["name"]
+        value = str(p["value"]).strip()
+
+        if name not in allowed:
+            results.append(
+                {"name": name, "success": False, "error": "Parameter not allowed"}
+            )
+            continue
+
+        # Validate: must be a non-negative integer
+        try:
+            int_val = int(value)
+            if int_val < 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            results.append(
+                {
+                    "name": name,
+                    "success": False,
+                    "error": "Must be a non-negative integer",
+                }
+            )
+            continue
+
+        path = os.path.join(base, name)
+        try:
+            with open(path, "w") as f:
+                f.write(value)
+            results.append({"name": name, "success": True})
+            logger.info("ZFS param %s set to %s", name, value)
+        except Exception as e:
+            results.append({"name": name, "success": False, "error": str(e)})
+
+        # Save to DB
+        if db is not None:
+            await _save_setting(db, "zfs", name, value)
+
+    if db is not None:
+        await db.commit()
+
+    # Persist to /etc/modprobe.d/zfs.conf so values survive reboot
+    if persist:
+        await _persist_zfs_modprobe(params, allowed)
+
+    return results
+
+
+async def _persist_zfs_modprobe(params: list[dict], allowed: set[str]):
+    """Write ZFS module options to /etc/modprobe.d/zfs.conf."""
+    try:
+        # Read current values from sysfs (includes just-applied ones)
+        base = "/sys/module/zfs/parameters"
+        current = {}
+        for name in _ZFS_PARAMS:
+            try:
+                with open(os.path.join(base, name), "r") as f:
+                    val = f.read().strip()
+                    if val and val != "0":
+                        current[name] = val
+            except Exception:
+                pass
+
+        # Build modprobe options line
+        if current:
+            opts = " ".join(f"{k}={v}" for k, v in current.items())
+            content = f"# ZFS tuning — managed by NFS Manager\noptions zfs {opts}\n"
+            with open("/etc/modprobe.d/zfs.conf", "w") as f:
+                f.write(content)
+            logger.info("Persisted ZFS params to /etc/modprobe.d/zfs.conf")
+
+            # Try to update initramfs
+            await _run(["update-initramfs", "-u", "-k", "all"], timeout=120)
+    except Exception as e:
+        logger.warning("Could not persist ZFS modprobe config: %s", e)
+
+
+async def load_saved_zfs_params(db: AsyncSession) -> list[dict]:
+    """Load ZFS params saved in DB."""
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.category == "zfs")
+    )
+    return [{"name": s.key, "value": s.value} for s in result.scalars().all()]
+
+
 # ── Persistent Settings helpers ──────────────────────────────────────────────
 
 
@@ -650,6 +794,15 @@ async def auto_apply_saved_settings(db: AsyncSession):
             logger.info("RPS/XPS settings applied successfully")
         else:
             logger.warning("RPS/XPS apply: %s", rps_result.get("error", "unknown"))
+
+    # ZFS tuning
+    zfs_saved = await load_saved_zfs_params(db)
+    if zfs_saved:
+        logger.info("Auto-applying %d saved ZFS parameters...", len(zfs_saved))
+        zfs_results = await apply_zfs_tuning(zfs_saved, persist=False)
+        ok = sum(1 for r in zfs_results if r.get("success"))
+        fail = sum(1 for r in zfs_results if not r.get("success"))
+        logger.info("ZFS params: %d applied, %d failed", ok, fail)
 
 
 # ── RPS/XPS CPU Load Balancing ───────────────────────────────────────────────

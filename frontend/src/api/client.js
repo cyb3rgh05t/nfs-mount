@@ -142,6 +142,9 @@ const api = {
   setNfsThreads: (threads) =>
     request("POST", "/system/nfs-threads", { threads }),
   getDiagnostics: () => request("GET", "/system/diagnostics"),
+  getZfsTuning: () => request("GET", "/system/zfs-tuning"),
+  applyZfsTuning: (params, persist = true) =>
+    request("POST", "/system/zfs-tuning", { params, persist }),
   getAppSettings: () => request("GET", "/system/app-settings"),
   updateAppSettings: (data) => request("POST", "/system/app-settings", data),
   getHealthCheck: () => request("GET", "/system/health-check"),
