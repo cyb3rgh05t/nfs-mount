@@ -486,7 +486,7 @@ export default function DashboardPage() {
                     )}
                     {c.mounted && c.used_percent != null && (
                       <div className="space-y-1.5">
-                        <div className="w-full bg-nfs-dark/50 rounded-full h-1.5 overflow-hidden">
+                        <div className="w-full h-2 rounded-full overflow-hidden bg-black/30 border border-white/10 shadow-inner">
                           <div
                             className={`h-full rounded-full transition-all ${
                               c.used_percent > 90
