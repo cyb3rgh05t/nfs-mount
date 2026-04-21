@@ -22,15 +22,9 @@ import {
   ShieldAlert,
   ChevronDown,
   ChevronRight,
-  Terminal,
   Globe,
   Layers,
-  Info,
   ExternalLink,
-  Heart,
-  FolderSync,
-  Database,
-  Activity,
   Box,
   Plus,
   Trash2,
@@ -132,7 +126,6 @@ const tabs = [
   { id: "firewall", label: "Firewall", icon: Flame },
   { id: "sshkeys", label: "SSH Keys", icon: KeyRound },
   { id: "howto", label: "How To", icon: BookOpen },
-  { id: "about", label: "About", icon: Info },
 ];
 
 export default function SettingsPage() {
@@ -1677,150 +1670,121 @@ export default function SettingsPage() {
           </div>
 
           {/* ZFS ARC Tuning */}
-          <div className="bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 hover:border-nfs-muted transition-all">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-                  <Database className="w-4 h-4" />
+          {zfsTuning !== null && (
+            <div
+              className={`bg-nfs-card border border-nfs-border rounded-xl p-5 mb-6 transition-all ${!zfsTuning?.available ? "opacity-50 pointer-events-none" : "hover:border-nfs-muted"}`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`p-2 rounded-lg ${zfsTuning?.available ? "bg-purple-500/10 text-purple-400" : "bg-nfs-input text-nfs-muted"}`}
+                  >
+                    <Database className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      ZFS ARC Tuning
+                    </h2>
+                    <p className="text-xs text-nfs-muted">
+                      {zfsTuning?.available
+                        ? "ZFS Adaptive Replacement Cache & I/O parameters"
+                        : "ZFS module not loaded — not available on this system"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    ZFS ARC Tuning
-                  </h2>
-                  <p className="text-xs text-nfs-muted">
-                    ZFS Adaptive Replacement Cache &amp; I/O parameters
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={refreshZfsTuning}
-                  className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
-                  title="Reload current values"
-                >
-                  <RefreshCw className="w-4 h-4 text-nfs-primary" />
-                  Refresh
-                </button>
-                <button
-                  onClick={applyZfsTuning}
-                  className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
-                >
-                  <Zap className="w-4 h-4 text-nfs-primary" />
-                  Apply &amp; Persist
-                </button>
-              </div>
-            </div>
-
-            {zfsTuning?.available ? (
-              <>
-                {/* ARC Stats Summary */}
-                {zfsTuning.arc_stats?.size && (
-                  <div className="flex gap-3 mb-4">
-                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
-                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
-                        ARC Size
-                      </p>
-                      <p className="text-sm font-semibold text-purple-400 font-mono">
-                        {formatBytes(zfsTuning.arc_stats.size)}
-                      </p>
-                    </div>
-                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
-                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
-                        ARC Max
-                      </p>
-                      <p className="text-sm font-semibold text-purple-400 font-mono">
-                        {formatBytes(zfsTuning.arc_stats.c_max)}
-                      </p>
-                    </div>
-                    <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
-                      <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
-                        Hit Rate
-                      </p>
-                      <p className="text-sm font-semibold text-green-400 font-mono">
-                        {zfsTuning.arc_stats.hits && zfsTuning.arc_stats.misses
-                          ? `${((zfsTuning.arc_stats.hits / (zfsTuning.arc_stats.hits + zfsTuning.arc_stats.misses)) * 100).toFixed(1)}%`
-                          : "N/A"}
-                      </p>
-                    </div>
+                {zfsTuning?.available && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={refreshZfsTuning}
+                      className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                      title="Reload current values"
+                    >
+                      <RefreshCw className="w-4 h-4 text-nfs-primary" />
+                      Refresh
+                    </button>
+                    <button
+                      onClick={applyZfsTuning}
+                      className="px-3 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                    >
+                      <Zap className="w-4 h-4 text-nfs-primary" />
+                      Apply &amp; Persist
+                    </button>
                   </div>
                 )}
-
-                {/* Editable params */}
-                <div className="space-y-1">
-                  {zfsTuning.params.map((p, i) => (
-                    <div
-                      key={p.name}
-                      className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2"
-                    >
-                      <code className="text-xs text-nfs-text font-mono flex-1 min-w-0">
-                        {p.name}
-                      </code>
-                      <span className="text-[10px] text-nfs-muted whitespace-nowrap">
-                        {p.name.includes("arc_max") ||
-                        p.name.includes("arc_min") ||
-                        p.name.includes("distance")
-                          ? formatBytes(p.value)
-                          : ""}
-                      </span>
-                      <input
-                        className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
-                        value={p.value}
-                        onChange={(e) => updateZfsParam(i, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-[10px] text-nfs-muted mt-2 px-1">
-                  Values are applied live and persisted to{" "}
-                  <code>/etc/modprobe.d/zfs.conf</code> + initramfs. ARC max/min
-                  in bytes (e.g. 214748364800 = 200 GB). Changes take effect
-                  immediately.
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-nfs-muted">
-                ZFS module not loaded — ZFS tuning not available on this system.
-              </p>
-            )}
-          </div>
-
-          {/* Docker Info */}
-          <Section
-            icon={Box}
-            title="Docker Environment"
-            iconColor=" bg-nfs-primary/10 text-nfs-primary"
-          >
-            <p className="text-xs text-nfs-muted mb-3 leading-relaxed">
-              Container and runtime information.
-            </p>
-            {dockerInfo ? (
-              <div className="space-y-1">
-                {[
-                  ["Docker Version", dockerInfo.docker_version],
-                  ["Container ID", dockerInfo.container_id],
-                  ["Image", dockerInfo.image],
-                  ["OS", dockerInfo.os],
-                  ["Architecture", dockerInfo.arch],
-                  [
-                    "Running in Docker",
-                    dockerInfo.running_in_docker ? "Yes" : "No",
-                  ],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between bg-nfs-input/50 rounded-lg px-4 py-2.5"
-                  >
-                    <span className="text-xs text-nfs-text">{label}</span>
-                    <code className="text-xs text-nfs-primary font-mono font-semibold">
-                      {value || "N/A"}
-                    </code>
-                  </div>
-                ))}
               </div>
-            ) : (
-              <p className="text-sm text-nfs-muted">Loading Docker info...</p>
-            )}
-          </Section>
+
+              {zfsTuning?.available ? (
+                <>
+                  {/* ARC Stats Summary */}
+                  {zfsTuning.arc_stats?.size && (
+                    <div className="flex gap-3 mb-4">
+                      <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                        <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                          ARC Size
+                        </p>
+                        <p className="text-sm font-semibold text-purple-400 font-mono">
+                          {formatBytes(zfsTuning.arc_stats.size)}
+                        </p>
+                      </div>
+                      <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                        <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                          ARC Max
+                        </p>
+                        <p className="text-sm font-semibold text-purple-400 font-mono">
+                          {formatBytes(zfsTuning.arc_stats.c_max)}
+                        </p>
+                      </div>
+                      <div className="flex-1 bg-nfs-input/50 rounded-lg px-4 py-2 text-center">
+                        <p className="text-[10px] text-nfs-muted uppercase tracking-wider">
+                          Hit Rate
+                        </p>
+                        <p className="text-sm font-semibold text-green-400 font-mono">
+                          {zfsTuning.arc_stats.hits &&
+                          zfsTuning.arc_stats.misses
+                            ? `${((zfsTuning.arc_stats.hits / (zfsTuning.arc_stats.hits + zfsTuning.arc_stats.misses)) * 100).toFixed(1)}%`
+                            : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Editable params */}
+                  <div className="space-y-1">
+                    {zfsTuning.params.map((p, i) => (
+                      <div
+                        key={p.name}
+                        className="flex items-center gap-3 bg-nfs-input/50 rounded-lg px-4 py-2"
+                      >
+                        <code className="text-xs text-nfs-text font-mono flex-1 min-w-0">
+                          {p.name}
+                        </code>
+                        <span className="text-[10px] text-nfs-muted whitespace-nowrap">
+                          {p.name.includes("arc_max") ||
+                          p.name.includes("arc_min") ||
+                          p.name.includes("distance")
+                            ? formatBytes(p.value)
+                            : ""}
+                        </span>
+                        <input
+                          className="px-3 py-1.5 bg-nfs-input border border-nfs-border rounded-lg text-xs text-nfs-primary font-mono font-semibold text-right w-52 focus:outline-none focus:ring-1 focus:ring-nfs-primary"
+                          value={p.value}
+                          onChange={(e) => updateZfsParam(i, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-nfs-muted mt-2 px-1">
+                    Values are applied live and persisted to{" "}
+                    <code>/etc/modprobe.d/zfs.conf</code> + initramfs. ARC
+                    max/min in bytes (e.g. 214748364800 = 200 GB). Changes take
+                    effect immediately.
+                  </p>
+                </>
+              ) : null}
+            </div>
+          )}
+
+          {/* Docker Info — moved to About page */}
         </>
       )}
 
@@ -2877,205 +2841,6 @@ devices:
         </>
       )}
 
-      {/* About Tab */}
-      {activeTab === "about" && (
-        <>
-          {/* Hero */}
-          <div className="bg-nfs-card border border-nfs-border rounded-xl p-8 mb-6 flex flex-col items-center text-center">
-            <div className="p-4 rounded-2xl bg-nfs-primary/10 mb-4">
-              <FolderSync className="w-10 h-10 text-nfs-primary" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">
-              NFS-MergerFS Manager
-            </h2>
-            <p className="text-sm text-nfs-primary font-medium mt-1">v1.0.0</p>
-            <p className="text-sm text-nfs-muted mt-3 max-w-lg leading-relaxed">
-              A powerful, self-hosted management platform for NFS mounts,
-              MergerFS unions, and VPN tunnels with real-time monitoring and
-              notifications.
-            </p>
-            <a
-              href="https://github.com/cyb3rgh05t/nfs-mount"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 px-5 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary rounded-lg text-sm text-white flex items-center gap-2 transition-all"
-            >
-              <Globe className="w-4 h-4" />
-              GitHub
-              <ExternalLink className="w-3 h-3 text-nfs-muted" />
-            </a>
-          </div>
-
-          {/* Features */}
-          <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-muted mb-3">
-            Features
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {[
-              {
-                icon: HardDrive,
-                title: "NFS Mounts",
-                desc: "Create, manage, and monitor NFS network mounts with optimized streaming options.",
-              },
-              {
-                icon: GitMerge,
-                title: "MergerFS Unions",
-                desc: "Combine multiple directories into unified virtual filesystems.",
-              },
-              {
-                icon: Shield,
-                title: "VPN Tunnels",
-                desc: "Manage WireGuard and OpenVPN tunnels with auto-connect and status monitoring.",
-              },
-              {
-                icon: Activity,
-                title: "Real-time Monitoring",
-                desc: "Monitor system resources, mount statuses, and network throughput in real-time.",
-              },
-              {
-                icon: Bell,
-                title: "Notifications",
-                desc: "Discord and Telegram alerts for mount events, errors, and system status.",
-              },
-              {
-                icon: Terminal,
-                title: "REST API",
-                desc: "Full REST API with JWT authentication for automation and external integrations.",
-              },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div
-                key={title}
-                className="bg-nfs-card border border-nfs-border rounded-xl p-4 hover:border-nfs-muted transition-all"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-1.5 rounded-lg bg-nfs-primary/10">
-                    <Icon className="w-4 h-4 text-nfs-primary" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-white">{title}</h3>
-                </div>
-                <p className="text-xs text-nfs-muted leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Tech Stack */}
-          <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-muted mb-3">
-            Tech Stack
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-nfs-card border border-nfs-border rounded-xl p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-primary mb-3">
-                Backend
-              </p>
-              <div className="space-y-2">
-                {[
-                  ["Python", "FastAPI"],
-                  ["SQLAlchemy", "ORM"],
-                  ["Uvicorn", "ASGI Server"],
-                  ["Pydantic", "Validation"],
-                ].map(([name, role]) => (
-                  <div
-                    key={name}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span className="text-nfs-text">{name}</span>
-                    <span className="text-nfs-muted">{role}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-nfs-card border border-nfs-border rounded-xl p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-primary mb-3">
-                Frontend
-              </p>
-              <div className="space-y-2">
-                {[
-                  ["React", "UI Framework"],
-                  ["Tailwind CSS", "Styling"],
-                  ["Vite", "Build Tool"],
-                  ["Lucide", "Icons"],
-                ].map(([name, role]) => (
-                  <div
-                    key={name}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span className="text-nfs-text">{name}</span>
-                    <span className="text-nfs-muted">{role}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-nfs-card border border-nfs-border rounded-xl p-4">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-primary mb-3">
-                Infrastructure
-              </p>
-              <div className="space-y-2">
-                {[
-                  ["Docker", "Containerization"],
-                  ["SQLite", "Database"],
-                  ["WireGuard", "VPN Tunnel"],
-                  ["MergerFS", "Union Filesystem"],
-                ].map(([name, role]) => (
-                  <div
-                    key={name}
-                    className="flex items-center justify-between text-xs"
-                  >
-                    <span className="text-nfs-text">{name}</span>
-                    <span className="text-nfs-muted">{role}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* System */}
-          {dockerInfo && (
-            <>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-nfs-muted mb-3">
-                System
-              </p>
-              <div className="bg-nfs-card border border-nfs-border rounded-xl p-4 mb-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    [
-                      "Docker",
-                      dockerInfo.docker_version
-                        ?.replace("Docker version ", "")
-                        .split(",")[0] || "N/A",
-                    ],
-                    ["Container", dockerInfo.container_id || "N/A"],
-                    ["OS", dockerInfo.os || "N/A"],
-                    ["Arch", dockerInfo.arch || "N/A"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-nfs-muted mb-1">
-                        {label}
-                      </p>
-                      <p className="text-xs text-nfs-text font-mono">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Footer */}
-          <div className="text-center py-4">
-            <p className="text-xs text-nfs-muted flex items-center justify-center gap-1">
-              Made with <Heart className="w-3 h-3 text-red-400 fill-red-400" />{" "}
-              by{" "}
-              <a
-                href="https://github.com/cyb3rgh05t"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-nfs-primary hover:underline"
-              >
-                cyb3rgh05t
-              </a>
-            </p>
-          </div>
-        </>
-      )}
       <ProgressDialog progress={progress} />
     </div>
   );

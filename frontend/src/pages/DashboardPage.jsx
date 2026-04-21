@@ -254,235 +254,305 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Mount Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* NFS Mounts */}
-        <div
-          onClick={() => navigate("/nfs/client")}
-          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 rounded-lg bg-nfs-primary/10">
-              <HardDrive className="w-4 h-4 text-nfs-primary" />
-            </div>
-            <h2 className="text-lg font-semibold text-white">NFS Mounts</h2>
-            <span className="ml-auto text-xs text-nfs-muted">
-              {status?.nfs_mounts_active || 0} active
-            </span>
-          </div>
-          {nfsStatus.length === 0 ? (
-            <InfoBox type="warning">No NFS mounts configured</InfoBox>
-          ) : (
-            <div className="space-y-2">
-              {nfsStatus.map((m) => (
-                <div
-                  key={m.id}
-                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-medium text-white">{m.name}</p>
-                      <p className="text-xs text-nfs-muted">{m.local_path}</p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
-                        m.mounted
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${m.mounted ? "bg-emerald-400" : "bg-red-400"}`}
-                      />
-                      {m.mounted ? "Mounted" : "Unmounted"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        m.server_reachable
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
-                      }`}
-                    >
-                      <span
-                        className={`w-1 h-1 rounded-full ${m.server_reachable ? "bg-emerald-400" : "bg-red-400"}`}
-                      />
-                      Server {m.server_reachable ? "Online" : "Offline"}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        m.validated
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                      }`}
-                    >
-                      <span
-                        className={`w-1 h-1 rounded-full ${m.validated ? "bg-emerald-400" : "bg-amber-400"}`}
-                      />
-                      {m.validated ? "Validated" : "Not Validated"}
-                    </span>
-                    {m.auto_mount && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
-                        Auto-Mount
-                      </span>
-                    )}
-                  </div>
+      {/* Mount Status — only shown when at least one section has data */}
+      {(nfsStatus.length > 0 ||
+        mergerStatus.length > 0 ||
+        nfsExports.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* NFS Mounts */}
+          {nfsStatus.length > 0 && (
+            <div
+              onClick={() => navigate("/nfs/client")}
+              className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-lg bg-nfs-primary/10">
+                  <HardDrive className="w-4 h-4 text-nfs-primary" />
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* MergerFS */}
-        <div
-          onClick={() => navigate("/mergerfs")}
-          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 rounded-lg bg-purple-500/10">
-              <GitMerge className="w-4 h-4 text-purple-400" />
-            </div>
-            <h2 className="text-lg font-semibold text-white">MergerFS</h2>
-            <span className="ml-auto text-xs text-nfs-muted">
-              {status?.mergerfs_mounts_active || 0} active
-            </span>
-          </div>
-          {mergerStatus.length === 0 ? (
-            <InfoBox type="warning">No MergerFS configs configured</InfoBox>
-          ) : (
-            <div className="space-y-2">
-              {mergerStatus.map((c) => (
-                <div
-                  key={c.id}
-                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-medium text-white">{c.name}</p>
-                      <p className="text-xs text-nfs-muted">{c.mount_point}</p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
-                        c.mounted
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
-                      />
-                      {c.mounted ? "Mounted" : "Unmounted"}
-                    </span>
-                  </div>
-                  {c.auto_mount && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
-                        Auto-Mount
-                      </span>
-                    </div>
-                  )}
-                  {c.mounted && c.used_percent != null && (
-                    <div className="space-y-1.5">
-                      <div className="w-full bg-nfs-dark/50 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            c.used_percent > 90
-                              ? "bg-red-400"
-                              : c.used_percent > 70
-                                ? "bg-amber-400"
-                                : "bg-emerald-400"
-                          }`}
-                          style={{ width: `${Math.min(c.used_percent, 100)}%` }}
-                        />
+                <h2 className="text-lg font-semibold text-white">NFS Mounts</h2>
+                <span className="ml-auto text-xs text-nfs-muted">
+                  {status?.nfs_mounts_active || 0} active
+                </span>
+              </div>
+              <div className="space-y-2">
+                {nfsStatus.map((m) => (
+                  <div
+                    key={m.id}
+                    className="bg-nfs-input/50 rounded-lg px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {m.name}
+                        </p>
+                        <p className="text-xs text-nfs-muted">{m.local_path}</p>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
-                          {c.used_space} / {c.total_space}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                          {c.free_space} free
-                        </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                          m.mounted
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            c.used_percent > 90
-                              ? "bg-red-500/15 text-red-400 border-red-500/30"
-                              : c.used_percent > 70
-                                ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                                : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          }`}
-                        >
-                          {c.used_percent}%
-                        </span>
+                          className={`w-1.5 h-1.5 rounded-full ${m.mounted ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        {m.mounted ? "Mounted" : "Unmounted"}
+                      </span>
+                    </div>
+                    {/* Mini detail chips */}
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1">
+                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider">
+                          Server
+                        </p>
+                        <p className="text-[10px] text-white font-mono truncate">
+                          {m.server_ip}
+                        </p>
+                      </div>
+                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1">
+                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider">
+                          Remote Path
+                        </p>
+                        <p className="text-[10px] text-white font-mono truncate">
+                          {m.remote_path}
+                        </p>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <div className="flex flex-wrap gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          m.server_reachable
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1 h-1 rounded-full ${m.server_reachable ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        Server {m.server_reachable ? "Online" : "Offline"}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          m.validated
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1 h-1 rounded-full ${m.validated ? "bg-emerald-400" : "bg-amber-400"}`}
+                        />
+                        {m.validated ? "Validated" : "Not Validated"}
+                      </span>
+                      {m.auto_mount && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-nfs-primary/15 text-nfs-primary border-nfs-primary/30">
+                          Auto-Mount
+                        </span>
+                      )}
+                      {m.nfs_version && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                          NFSv{m.nfs_version}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
 
-        {/* NFS Exports */}
-        <div
-          onClick={() => navigate("/nfs/exports")}
-          className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <Upload className="w-4 h-4 text-blue-400" />
-            </div>
-            <h2 className="text-lg font-semibold text-white">NFS Exports</h2>
-            <span className="ml-auto text-xs text-nfs-muted">
-              {nfsExports.filter((e) => e.is_active).length} active
-            </span>
-          </div>
-          {nfsExports.length === 0 ? (
-            <InfoBox type="warning">No NFS exports configured</InfoBox>
-          ) : (
-            <div className="space-y-2">
-              {nfsExports.map((e) => (
-                <div
-                  key={e.id}
-                  className="bg-nfs-input/50 rounded-lg px-4 py-3"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-medium text-white">{e.name}</p>
-                      <p className="text-xs text-nfs-muted">{e.export_path}</p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
-                        e.is_active
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
-                      }`}
-                    >
+          {/* MergerFS */}
+          {mergerStatus.length > 0 && (
+            <div
+              onClick={() => navigate("/mergerfs")}
+              className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-lg bg-purple-500/10">
+                  <GitMerge className="w-4 h-4 text-purple-400" />
+                </div>
+                <h2 className="text-lg font-semibold text-white">MergerFS</h2>
+                <span className="ml-auto text-xs text-nfs-muted">
+                  {status?.mergerfs_mounts_active || 0} active
+                </span>
+              </div>
+              <div className="space-y-2">
+                {mergerStatus.map((c) => (
+                  <div
+                    key={c.id}
+                    className="bg-nfs-input/50 rounded-lg px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {c.name}
+                        </p>
+                        <p className="text-xs text-nfs-muted">
+                          {c.mount_point}
+                        </p>
+                      </div>
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${e.is_active ? "bg-emerald-400" : "bg-red-400"}`}
-                      />
-                      {e.is_active ? "Exported" : "Inactive"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
-                      NFS v{e.nfs_version || "4.2"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
-                      {e.allowed_hosts || "*"}
-                    </span>
-                    {e.auto_enable && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
-                        Auto-Enable
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                          c.mounted
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${c.mounted ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        {c.mounted ? "Mounted" : "Unmounted"}
                       </span>
+                    </div>
+                    {/* Mini detail chips */}
+                    {c.sources && c.sources.length > 0 && (
+                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1.5 mb-2">
+                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider mb-1">
+                          Sources ({c.sources.length})
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {c.sources.map((src, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 font-mono text-blue-300 truncate max-w-[120px]"
+                            >
+                              {src}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {c.auto_mount && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
+                          Auto-Mount
+                        </span>
+                      </div>
+                    )}
+                    {c.mounted && c.used_percent != null && (
+                      <div className="space-y-1.5">
+                        <div className="w-full bg-nfs-dark/50 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              c.used_percent > 90
+                                ? "bg-red-400"
+                                : c.used_percent > 70
+                                  ? "bg-amber-400"
+                                  : "bg-emerald-400"
+                            }`}
+                            style={{
+                              width: `${Math.min(c.used_percent, 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                            {c.used_space} / {c.total_space}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                            {c.free_space} free
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              c.used_percent > 90
+                                ? "bg-red-500/15 text-red-400 border-red-500/30"
+                                : c.used_percent > 70
+                                  ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                  : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            }`}
+                          >
+                            {c.used_percent}%
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* NFS Exports */}
+          {nfsExports.length > 0 && (
+            <div
+              onClick={() => navigate("/nfs/exports")}
+              className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-lg bg-blue-500/10">
+                  <Upload className="w-4 h-4 text-blue-400" />
                 </div>
-              ))}
+                <h2 className="text-lg font-semibold text-white">
+                  NFS Exports
+                </h2>
+                <span className="ml-auto text-xs text-nfs-muted">
+                  {nfsExports.filter((e) => e.is_active).length} active
+                </span>
+              </div>
+              <div className="space-y-2">
+                {nfsExports.map((e) => (
+                  <div
+                    key={e.id}
+                    className="bg-nfs-input/50 rounded-lg px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {e.name}
+                        </p>
+                        <p className="text-xs text-nfs-muted">
+                          {e.export_path}
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${
+                          e.is_active
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${e.is_active ? "bg-emerald-400" : "bg-red-400"}`}
+                        />
+                        {e.is_active ? "Exported" : "Inactive"}
+                      </span>
+                    </div>
+                    {/* Mini detail chips */}
+                    <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1">
+                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider">
+                          Allowed Hosts
+                        </p>
+                        <p className="text-[10px] text-white font-mono truncate">
+                          {e.allowed_hosts || "*"}
+                        </p>
+                      </div>
+                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1">
+                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider">
+                          NFS Version
+                        </p>
+                        <p className="text-[10px] text-white font-mono">
+                          v{e.nfs_version || "4.2"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                        NFS v{e.nfs_version || "4.2"}
+                      </span>
+                      {e.auto_enable && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-blue-500/15 text-blue-400 border-blue-500/30">
+                          Auto-Enable
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* VPN, Firewall & Kernel Info */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
@@ -576,10 +646,12 @@ export default function DashboardPage() {
                           active={firewallStatus.export_protection?.active}
                           label={`Export ${firewallStatus.export_protection?.active ? "Protected" : "Unprotected"}`}
                         />
-                        <Badge
-                          active={firewallStatus.client_protection?.active}
-                          label={`Client ${firewallStatus.client_protection?.active ? "Protected" : "Unprotected"}`}
-                        />
+                        {nfsStatus.length > 0 && (
+                          <Badge
+                            active={firewallStatus.client_protection?.active}
+                            label={`Client ${firewallStatus.client_protection?.active ? "Protected" : "Unprotected"}`}
+                          />
+                        )}
                         <Badge
                           active={firewallStatus.vpn_only}
                           label={`VPN-Only ${firewallStatus.vpn_only ? "ON" : "OFF"}`}

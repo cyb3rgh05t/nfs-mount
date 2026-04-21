@@ -17,6 +17,7 @@ import {
   Download,
   Upload,
   ChevronDown,
+  Info,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -39,6 +40,7 @@ const links = [
   { to: "/benchmark", label: "Benchmark", icon: Gauge },
   { to: "/logs", label: "Logs", icon: ScrollText },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/about", label: "About", icon: Info },
 ];
 
 export default function Sidebar() {

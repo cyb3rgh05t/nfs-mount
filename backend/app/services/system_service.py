@@ -1107,8 +1107,8 @@ async def get_diagnostics() -> dict:
         "net.core.wmem_max": {"min": 134217728},
         "net.ipv4.tcp_congestion_control": {"expected": "bbr"},
         "net.core.default_qdisc": {"expected": "fq"},
-        "vm.dirty_ratio": {"min": 30},
-        "vm.dirty_background_ratio": {"min": 5},
+        "vm.dirty_ratio": {"min": 5},
+        "vm.dirty_background_ratio": {"min": 3},
         "net.core.netdev_budget": {"min": 300},
         "net.core.optmem_max": {"min": 262144},
     }

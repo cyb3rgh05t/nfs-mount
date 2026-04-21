@@ -13,6 +13,7 @@ import BenchmarkPage from "./pages/BenchmarkPage";
 import LogsPage from "./pages/LogsPage";
 import VPNPage from "./pages/VPNPage";
 import ServerMonitorPage from "./pages/ServerMonitorPage";
+import AboutPage from "./pages/AboutPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/benchmark" element={<BenchmarkPage />} />
                 <Route path="/logs" element={<LogsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/about" element={<AboutPage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>
