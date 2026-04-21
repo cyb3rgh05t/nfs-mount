@@ -176,15 +176,6 @@ export default function DashboardPage() {
   const hasExportCards = nfsExports.length > 0;
   const hasClientFirewall = hasNfsCards;
   const hasExportFirewall = hasExportCards;
-  const mountCardCount = [hasNfsCards, hasMergerCards, hasExportCards].filter(
-    Boolean,
-  ).length;
-  const mountGridClass =
-    mountCardCount === 1
-      ? "grid grid-cols-1 lg:grid-cols-1 gap-6"
-      : mountCardCount === 2
-        ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
-        : "grid grid-cols-1 lg:grid-cols-3 gap-6";
 
   return (
     <div>
@@ -312,7 +303,7 @@ export default function DashboardPage() {
 
       {/* Mount Status — only shown when at least one section has data */}
       {(hasNfsCards || hasMergerCards || hasExportCards) && (
-        <div className={mountGridClass}>
+        <div className="grid grid-cols-1 gap-6">
           {/* NFS Mounts */}
           {hasNfsCards && (
             <div
