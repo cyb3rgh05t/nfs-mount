@@ -36,6 +36,7 @@ import {
   CheckCircle,
   RefreshCw,
   Zap,
+  Database,
   Network,
   KeyRound,
   Upload,

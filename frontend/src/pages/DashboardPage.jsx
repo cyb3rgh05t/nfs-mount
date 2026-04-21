@@ -10,7 +10,6 @@ import {
   Shield,
   GitMerge,
   RefreshCw,
-  Plus,
   Download,
   Upload,
   ScrollText,
@@ -95,24 +94,66 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [st, sys, nfs, merger, exports, vpn, kp, rps, fw, logData] =
-        await Promise.all([
-          api.getSystemStatus(),
-          api.getSystemStats(),
-          api.getNFSStatus().catch(() => []),
-          api.getMergerFSStatus().catch(() => []),
-          api.getNFSExportsStatus().catch(() => []),
-          api.getAllVPNStatus().catch(() => []),
-          api.getKernelParams().catch(() => []),
-          api.getRpsXps().catch(() => null),
-          api.getFirewallStatus().catch(() => null),
-          api.getLogs(20).catch(() => []),
-        ]);
+      const [
+        st,
+        sys,
+        nfsStatusRaw,
+        nfsMounts,
+        mergerStatusRaw,
+        mergerConfigs,
+        exportStatusRaw,
+        nfsExportConfigs,
+        vpn,
+        kp,
+        rps,
+        fw,
+        logData,
+      ] = await Promise.all([
+        api.getSystemStatus(),
+        api.getSystemStats(),
+        api.getNFSStatus().catch(() => []),
+        api.getNFSMounts().catch(() => []),
+        api.getMergerFSStatus().catch(() => []),
+        api.getMergerFSConfigs().catch(() => []),
+        api.getNFSExportsStatus().catch(() => []),
+        api.getNFSExports().catch(() => []),
+        api.getAllVPNStatus().catch(() => []),
+        api.getKernelParams().catch(() => []),
+        api.getRpsXps().catch(() => null),
+        api.getFirewallStatus().catch(() => null),
+        api.getLogs(20).catch(() => []),
+      ]);
+
+      // Merge status endpoints with config endpoints so dashboard cards always
+      // have full metadata (server/path/sources), even if status payload is minimal.
+      const nfsStatusById = new Map(
+        nfsStatusRaw.map((item) => [item.id, item]),
+      );
+      const mergerStatusById = new Map(
+        mergerStatusRaw.map((item) => [item.id, item]),
+      );
+      const exportStatusById = new Map(
+        exportStatusRaw.map((item) => [item.id, item]),
+      );
+
+      const nfsMerged = nfsMounts.map((mount) => ({
+        ...mount,
+        ...(nfsStatusById.get(mount.id) || {}),
+      }));
+      const mergerMerged = mergerConfigs.map((cfg) => ({
+        ...cfg,
+        ...(mergerStatusById.get(cfg.id) || {}),
+      }));
+      const exportsMerged = nfsExportConfigs.map((exp) => ({
+        ...exp,
+        ...(exportStatusById.get(exp.id) || {}),
+      }));
+
       setStatus(st);
       setStats(sys);
-      setNfsStatus(nfs);
-      setMergerStatus(merger);
-      setNfsExports(exports);
+      setNfsStatus(nfsMerged);
+      setMergerStatus(mergerMerged);
+      setNfsExports(exportsMerged);
       setVpnStatus(vpn);
       setKernelParams(kp);
       setRpsXps(rps);
@@ -129,6 +170,21 @@ export default function DashboardPage() {
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const hasNfsCards = nfsStatus.length > 0;
+  const hasMergerCards = mergerStatus.length > 0;
+  const hasExportCards = nfsExports.length > 0;
+  const hasClientFirewall = hasNfsCards;
+  const hasExportFirewall = hasExportCards;
+  const mountCardCount = [hasNfsCards, hasMergerCards, hasExportCards].filter(
+    Boolean,
+  ).length;
+  const mountGridClass =
+    mountCardCount === 1
+      ? "grid grid-cols-1 lg:grid-cols-1 gap-6"
+      : mountCardCount === 2
+        ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
+        : "grid grid-cols-1 lg:grid-cols-3 gap-6";
 
   return (
     <div>
@@ -255,12 +311,10 @@ export default function DashboardPage() {
       </div>
 
       {/* Mount Status — only shown when at least one section has data */}
-      {(nfsStatus.length > 0 ||
-        mergerStatus.length > 0 ||
-        nfsExports.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {(hasNfsCards || hasMergerCards || hasExportCards) && (
+        <div className={mountGridClass}>
           {/* NFS Mounts */}
-          {nfsStatus.length > 0 && (
+          {hasNfsCards && (
             <div
               onClick={() => navigate("/nfs/client")}
               className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
@@ -307,7 +361,7 @@ export default function DashboardPage() {
                           Server
                         </p>
                         <p className="text-[10px] text-white font-mono truncate">
-                          {m.server_ip}
+                          {m.server_ip || m.server || "N/A"}
                         </p>
                       </div>
                       <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1">
@@ -315,7 +369,7 @@ export default function DashboardPage() {
                           Remote Path
                         </p>
                         <p className="text-[10px] text-white font-mono truncate">
-                          {m.remote_path}
+                          {m.remote_path || m.remote || "N/A"}
                         </p>
                       </div>
                     </div>
@@ -362,7 +416,7 @@ export default function DashboardPage() {
           )}
 
           {/* MergerFS */}
-          {mergerStatus.length > 0 && (
+          {hasMergerCards && (
             <div
               onClick={() => navigate("/mergerfs")}
               className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
@@ -405,23 +459,33 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     {/* Mini detail chips */}
-                    {c.sources && c.sources.length > 0 && (
-                      <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1.5 mb-2">
-                        <p className="text-[9px] text-nfs-muted uppercase tracking-wider mb-1">
-                          Sources ({c.sources.length})
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {c.sources.map((src, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 font-mono text-blue-300 truncate max-w-[120px]"
-                            >
-                              {src}
-                            </span>
-                          ))}
+                    {(() => {
+                      const sources = Array.isArray(c.sources)
+                        ? c.sources
+                        : typeof c.sources === "string"
+                          ? c.sources
+                              .split(":")
+                              .map((s) => s.trim())
+                              .filter(Boolean)
+                          : [];
+                      return sources.length > 0 ? (
+                        <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1.5 mb-2">
+                          <p className="text-[9px] text-nfs-muted uppercase tracking-wider mb-1">
+                            Sources ({sources.length})
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {sources.map((src, i) => (
+                              <span
+                                key={i}
+                                className="inline-flex items-center text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 font-mono text-blue-300 truncate max-w-[120px]"
+                              >
+                                {src}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ) : null;
+                    })()}
                     {c.auto_mount && (
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border bg-purple-500/15 text-purple-400 border-purple-500/30">
@@ -473,7 +537,7 @@ export default function DashboardPage() {
           )}
 
           {/* NFS Exports */}
-          {nfsExports.length > 0 && (
+          {hasExportCards && (
             <div
               onClick={() => navigate("/nfs/exports")}
               className="bg-nfs-card border border-nfs-border rounded-xl p-5 hover:border-nfs-muted transition-all cursor-pointer"
@@ -608,8 +672,10 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-lg font-semibold text-white">Firewall</h2>
             {firewallStatus &&
-              (firewallStatus.export_protection?.active ||
-                firewallStatus.client_protection?.active) && (
+              ((hasExportFirewall &&
+                firewallStatus.export_protection?.active) ||
+                (hasClientFirewall &&
+                  firewallStatus.client_protection?.active)) && (
                 <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   Active
@@ -642,11 +708,13 @@ export default function DashboardPage() {
                     );
                     return (
                       <>
-                        <Badge
-                          active={firewallStatus.export_protection?.active}
-                          label={`Export ${firewallStatus.export_protection?.active ? "Protected" : "Unprotected"}`}
-                        />
-                        {nfsStatus.length > 0 && (
+                        {hasExportFirewall && (
+                          <Badge
+                            active={firewallStatus.export_protection?.active}
+                            label={`Export ${firewallStatus.export_protection?.active ? "Protected" : "Unprotected"}`}
+                          />
+                        )}
+                        {hasClientFirewall && (
                           <Badge
                             active={firewallStatus.client_protection?.active}
                             label={`Client ${firewallStatus.client_protection?.active ? "Protected" : "Unprotected"}`}
@@ -683,18 +751,22 @@ export default function DashboardPage() {
                     );
                     return (
                       <>
-                        <Badge
-                          active={
-                            firewallStatus.export_protection?.rules_count > 0
-                          }
-                          label={`${firewallStatus.export_protection?.rules_count || 0} Export Rules`}
-                        />
-                        <Badge
-                          active={
-                            firewallStatus.client_protection?.rules_count > 0
-                          }
-                          label={`${firewallStatus.client_protection?.rules_count || 0} Client Rules`}
-                        />
+                        {hasExportFirewall && (
+                          <Badge
+                            active={
+                              firewallStatus.export_protection?.rules_count > 0
+                            }
+                            label={`${firewallStatus.export_protection?.rules_count || 0} Export Rules`}
+                          />
+                        )}
+                        {hasClientFirewall && (
+                          <Badge
+                            active={
+                              firewallStatus.client_protection?.rules_count > 0
+                            }
+                            label={`${firewallStatus.client_protection?.rules_count || 0} Client Rules`}
+                          />
+                        )}
                         {firewallStatus.vpn_interfaces?.length > 0 && (
                           <Badge
                             active={true}
