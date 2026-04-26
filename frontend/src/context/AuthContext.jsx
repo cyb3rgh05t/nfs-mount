@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
 
 const AuthContext = createContext(null);
@@ -7,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [loading, setLoading] = useState(!!localStorage.getItem("token"));
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!token) return;
@@ -28,10 +30,15 @@ export function AuthProvider({ children }) {
       setToken("");
       setUser(null);
       localStorage.removeItem("token");
+      // Cancel any in-flight queries and drop cached results so the next
+      // login starts with a clean slate (and React-Query stops polling
+      // immediately).
+      queryClient.cancelQueries();
+      queryClient.clear();
     };
     window.addEventListener("auth:unauthorized", handler);
     return () => window.removeEventListener("auth:unauthorized", handler);
-  }, []);
+  }, [queryClient]);
 
   const login = async (username, password) => {
     const data = await api.login(username, password);
@@ -45,6 +52,8 @@ export function AuthProvider({ children }) {
     setToken("");
     setUser(null);
     localStorage.removeItem("token");
+    queryClient.cancelQueries();
+    queryClient.clear();
   };
 
   const updateUser = (updated) => setUser(updated);

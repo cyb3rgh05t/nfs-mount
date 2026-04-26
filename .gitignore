@@ -15,3 +15,4 @@ data/
 .vs/
 scripts/optimize-storage150.sh
 scripts/optimize-storage300.sh
+AGENTS.md

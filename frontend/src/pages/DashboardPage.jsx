@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Activity,
   Cpu,
@@ -15,9 +15,8 @@ import {
   ScrollText,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import api from "../api/client";
-import { useCachedState } from "../hooks/useCache";
-import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import ProgressDialog from "../components/ProgressDialog";
 
@@ -75,75 +74,87 @@ function formatUptime(seconds) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useCachedState("dash-status", null);
-  const [stats, setStats] = useCachedState("dash-stats", null);
-  const [nfsStatus, setNfsStatus] = useCachedState("dash-nfs", []);
-  const [mergerStatus, setMergerStatus] = useCachedState("dash-merger", []);
-  const [nfsExports, setNfsExports] = useCachedState("dash-exports", []);
-  const [vpnStatus, setVpnStatus] = useCachedState("dash-vpn", []);
-  const [kernelParams, setKernelParams] = useCachedState("dash-kernel", []);
-  const [rpsXps, setRpsXps] = useCachedState("dash-rpsxps", null);
-  const [firewallStatus, setFirewallStatus] = useCachedState(
-    "dash-firewall",
-    null,
-  );
-  const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
-  const [progress, setProgress] = useState(null);
-  const [recentLogs, setRecentLogs] = useState([]);
-  const logsEndRef = useAutoScroll([recentLogs]);
 
-  const fetchData = async () => {
-    try {
-      // One bundled request instead of 13 individual polls.
-      const data = await api.getDashboardSummary();
+  // Single React-Query that drives the whole dashboard. Polls every 30s,
+  // pauses automatically when the tab is hidden, dedupes between mounts.
+  const {
+    data,
+    error: queryError,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: () => api.getDashboardSummary(),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
 
-      // Merge status endpoints with config endpoints so dashboard cards always
-      // have full metadata (server/path/sources), even if status payload is minimal.
-      const nfsStatusById = new Map(
-        (data.nfs_status || []).map((item) => [item.id, item]),
-      );
-      const mergerStatusById = new Map(
-        (data.mergerfs_status || []).map((item) => [item.id, item]),
-      );
-      const exportStatusById = new Map(
-        (data.nfs_exports_status || []).map((item) => [item.id, item]),
-      );
-
-      const nfsMerged = (data.nfs_mounts || []).map((mount) => ({
-        ...mount,
-        ...(nfsStatusById.get(mount.id) || {}),
-      }));
-      const mergerMerged = (data.mergerfs_configs || []).map((cfg) => ({
-        ...cfg,
-        ...(mergerStatusById.get(cfg.id) || {}),
-      }));
-      const exportsMerged = (data.nfs_exports || []).map((exp) => ({
-        ...exp,
-        ...(exportStatusById.get(exp.id) || {}),
-      }));
-
-      setStatus(data.status);
-      setStats(data.stats);
-      setNfsStatus(nfsMerged);
-      setMergerStatus(mergerMerged);
-      setNfsExports(exportsMerged);
-      setVpnStatus(data.vpn_status || []);
-      setKernelParams(data.kernel_params || []);
-      setRpsXps(data.rps_xps);
-      setFirewallStatus(data.firewall_status);
-      setRecentLogs(data.logs || []);
-      setError("");
-    } catch (e) {
-      setError(e.message);
+  // Derive view-model. `useMemo` keeps merged arrays referentially stable
+  // until the underlying payload actually changes.
+  const view = useMemo(() => {
+    if (!data) {
+      return {
+        status: null,
+        stats: null,
+        nfsStatus: [],
+        mergerStatus: [],
+        nfsExports: [],
+        vpnStatus: [],
+        kernelParams: [],
+        rpsXps: null,
+        firewallStatus: null,
+        recentLogs: [],
+      };
     }
-  };
+    const nfsStatusById = new Map(
+      (data.nfs_status || []).map((item) => [item.id, item]),
+    );
+    const mergerStatusById = new Map(
+      (data.mergerfs_status || []).map((item) => [item.id, item]),
+    );
+    const exportStatusById = new Map(
+      (data.nfs_exports_status || []).map((item) => [item.id, item]),
+    );
+    return {
+      status: data.status,
+      stats: data.stats,
+      nfsStatus: (data.nfs_mounts || []).map((m) => ({
+        ...m,
+        ...(nfsStatusById.get(m.id) || {}),
+      })),
+      mergerStatus: (data.mergerfs_configs || []).map((c) => ({
+        ...c,
+        ...(mergerStatusById.get(c.id) || {}),
+      })),
+      nfsExports: (data.nfs_exports || []).map((e) => ({
+        ...e,
+        ...(exportStatusById.get(e.id) || {}),
+      })),
+      vpnStatus: data.vpn_status || [],
+      kernelParams: data.kernel_params || [],
+      rpsXps: data.rps_xps,
+      firewallStatus: data.firewall_status,
+      recentLogs: data.logs || [],
+    };
+  }, [data]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-  // Poll every 30s while the tab is visible.
-  usePolling(fetchData, 30000);
+  const {
+    status,
+    stats,
+    nfsStatus,
+    mergerStatus,
+    nfsExports,
+    vpnStatus,
+    kernelParams,
+    rpsXps,
+    firewallStatus,
+    recentLogs,
+  } = view;
+
+  const error = queryError ? queryError.message : "";
+  const refreshing = isFetching;
+  const [progress, setProgress] = useState(null);
+  const logsEndRef = useAutoScroll([recentLogs]);
 
   const hasNfsCards = nfsStatus.length > 0;
   const hasMergerCards = mergerStatus.length > 0;
@@ -191,13 +202,12 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={async () => {
-              setRefreshing(true);
               setProgress({
                 message: "Refreshing dashboard...",
                 status: "loading",
               });
               try {
-                await fetchData();
+                await refetch();
                 setProgress({
                   message: "Dashboard refreshed",
                   status: "success",
@@ -209,7 +219,6 @@ export default function DashboardPage() {
                   detail: e.message,
                 });
               }
-              setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"

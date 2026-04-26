@@ -9,9 +9,9 @@ import {
   Pause,
   Play,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
-import { usePolling } from "../hooks/usePolling";
 import ProgressDialog from "../components/ProgressDialog";
 import CustomSelect from "../components/CustomSelect";
 
@@ -27,9 +27,6 @@ const LEVEL_OPTIONS = ["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
 
 export default function LogsPage() {
   const toast = useToast();
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [level, setLevel] = useState("ALL");
   const [lines, setLines] = useState(500);
@@ -39,25 +36,26 @@ export default function LogsPage() {
   const logEndRef = useRef(null);
   const containerRef = useRef(null);
 
-  const fetchLogs = async () => {
-    try {
-      const data = await api.getLogs(lines, level === "ALL" ? null : level);
-      setLogs(data);
-    } catch (e) {
-      toast.error("Failed to load logs: " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React-Query: re-runs whenever `level` or `lines` change (because the key
+  // changes), polls every 10s while autoRefresh is on and tab is visible.
+  const {
+    data: logs = [],
+    isLoading: loading,
+    isFetching: refreshing,
+    refetch,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["logs", { lines, level }],
+    queryFn: () => api.getLogs(lines, level === "ALL" ? null : level),
+    refetchInterval: autoRefresh ? 10_000 : false,
+    refetchIntervalInBackground: false,
+  });
 
-  // Refresh logs every 10s while the tab is visible. Disabled when the user
-  // toggles autoRefresh off. Filter / line-count changes also trigger a refetch.
-  usePolling(fetchLogs, 10000, autoRefresh);
   useEffect(() => {
-    if (!autoRefresh) fetchLogs();
-    // run once on filter change even when autoRefresh is off
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, lines]);
+    if (queryError) {
+      toast.error("Failed to load logs: " + queryError.message);
+    }
+  }, [queryError, toast]);
 
   useEffect(() => {
     if (autoScroll && logEndRef.current) {
@@ -115,10 +113,9 @@ export default function LogsPage() {
           </button>
           <button
             onClick={async () => {
-              setRefreshing(true);
               setProgress({ message: "Refreshing logs...", status: "loading" });
               try {
-                await fetchLogs();
+                await refetch();
                 setProgress({ message: "Logs refreshed", status: "success" });
               } catch (e) {
                 setProgress({
@@ -127,7 +124,6 @@ export default function LogsPage() {
                   detail: e.message,
                 });
               }
-              setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"
