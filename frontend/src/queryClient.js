@@ -20,7 +20,10 @@ export const queryClient = new QueryClient({
       refetchIntervalInBackground: false,
       retry: (failureCount, error) => {
         const msg = String(error?.message || "");
-        if (msg.includes("Invalid token") || msg.includes("Not authenticated")) {
+        if (
+          msg.includes("Invalid token") ||
+          msg.includes("Not authenticated")
+        ) {
           return false;
         }
         return failureCount < 1;
