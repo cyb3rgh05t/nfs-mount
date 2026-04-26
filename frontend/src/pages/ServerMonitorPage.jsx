@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Monitor,
   Plus,
@@ -25,8 +26,6 @@ import {
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
-import { useCachedState } from "../hooks/useCache";
-import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import CustomSelect from "../components/CustomSelect";
@@ -117,11 +116,6 @@ const inputClass =
   "w-full bg-nfs-input border border-nfs-border rounded-lg px-3 py-2 text-sm text-white focus:border-nfs-primary focus:outline-none transition-colors";
 
 export default function ServerMonitorPage() {
-  const [servers, setServers] = useCachedState("monitor-servers", []);
-  const [metrics, setMetrics] = useCachedState("monitor-metrics", {});
-  const [sshKeys, setSSHKeys] = useCachedState("monitor-sshkeys", []);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [testing, setTesting] = useState(null);
@@ -129,49 +123,35 @@ export default function ServerMonitorPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const fetchServers = async () => {
-    try {
-      const data = await api.getMonitorServers();
-      setServers(data);
-    } catch (e) {
-      toast.error("Failed to load servers");
-    }
-  };
+  const {
+    data: queryData,
+    isLoading: loading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["monitor", "all"],
+    queryFn: async () => {
+      const [serversData, metricsData, keysData] = await Promise.all([
+        api.getMonitorServers().catch((e) => {
+          toast.error("Failed to load servers");
+          throw e;
+        }),
+        api.getMonitorMetrics().catch(() => []),
+        api.getSSHKeys().catch(() => []),
+      ]);
+      const metricsMap = {};
+      metricsData.forEach((m) => (metricsMap[m.server_id] = m));
+      return { servers: serversData, metrics: metricsMap, sshKeys: keysData };
+    },
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
 
-  const fetchMetrics = async () => {
-    try {
-      const data = await api.getMonitorMetrics();
-      const map = {};
-      data.forEach((m) => (map[m.server_id] = m));
-      setMetrics(map);
-    } catch {
-      // silently fail on metric fetch
-    }
-  };
-
-  const fetchAll = async (showSpinner = false) => {
-    if (showSpinner) setRefreshing(true);
-    await fetchServers();
-    await fetchMetrics();
-    await fetchSSHKeys();
-    if (showSpinner) setRefreshing(false);
-  };
-
-  const fetchSSHKeys = async () => {
-    try {
-      const data = await api.getSSHKeys();
-      setSSHKeys(data);
-    } catch {
-      // silently fail
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    fetchAll().finally(() => setLoading(false));
-  }, []);
-  // Refresh metrics every 60s while the tab is visible.
-  usePolling(fetchMetrics, 60000);
+  const servers = queryData?.servers ?? [];
+  const metrics = queryData?.metrics ?? {};
+  const sshKeys = queryData?.sshKeys ?? [];
+  const refreshing = isFetching;
+  const fetchAll = () => refetch();
 
   const openCreate = () => {
     setForm({

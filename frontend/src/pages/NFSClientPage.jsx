@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   HardDrive,
   Plus,
@@ -16,8 +17,6 @@ import {
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
-import { useCachedState } from "../hooks/useCache";
-import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
@@ -80,14 +79,11 @@ const inputClass =
   "w-full px-4 py-2.5 bg-nfs-input border border-nfs-border rounded-lg text-white placeholder-nfs-muted text-sm focus:outline-none focus:ring-2 focus:ring-nfs-primary focus:border-transparent";
 
 export default function NFSClientPage() {
-  const [mounts, setMounts] = useCachedState("nfs-mounts", []);
-  const [statuses, setStatuses] = useCachedState("nfs-statuses", {});
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState("");
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
   const [form, setForm] = useState({
@@ -102,23 +98,35 @@ export default function NFSClientPage() {
     enabled: true,
   });
 
-  const fetchData = async () => {
-    try {
+  const {
+    data: queryData,
+    isFetching,
+    refetch,
+    error: queryError,
+  } = useQuery({
+    queryKey: ["nfs", "mounts"],
+    queryFn: async () => {
       const [m, s] = await Promise.all([
         api.getNFSMounts(),
         api.getNFSStatus().catch(() => []),
       ]);
-      setMounts(m);
       const statusMap = {};
       s.forEach((st) => (statusMap[st.id] = st));
-      setStatuses(statusMap);
-    } catch (e) {
-      setError(e.message);
-    }
-  };
+      return { mounts: m, statuses: statusMap };
+    },
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
 
-  // Poll every 30s; pauses automatically when the tab is hidden.
-  usePolling(fetchData, 30000);
+  const mounts = queryData?.mounts ?? [];
+  const statuses = queryData?.statuses ?? {};
+  const refreshing = isFetching;
+  const fetchData = () => refetch();
+
+  // surface query errors into the existing error banner
+  useEffect(() => {
+    if (queryError) setError(queryError.message);
+  }, [queryError]);
 
   const openCreate = () => {
     setEditing(null);
@@ -378,13 +386,12 @@ export default function NFSClientPage() {
           </button>
           <button
             onClick={async () => {
-              setRefreshing(true);
               setProgress({
                 message: "Refreshing NFS mounts...",
                 status: "loading",
               });
               try {
-                await fetchData();
+                await refetch();
                 setProgress({
                   message: "NFS mounts refreshed",
                   status: "success",
@@ -396,7 +403,6 @@ export default function NFSClientPage() {
                   detail: e.message,
                 });
               }
-              setRefreshing(false);
               setTimeout(() => setProgress(null), 1500);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-nfs-card border border-nfs-border hover:border-nfs-primary text-white rounded-lg text-sm font-medium transition-all"

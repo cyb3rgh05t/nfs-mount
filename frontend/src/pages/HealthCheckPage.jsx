@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   HeartPulse,
   RefreshCw,
@@ -20,7 +21,6 @@ import {
 import { useToast } from "../components/ToastProvider";
 import Toggle from "../components/Toggle";
 import api from "../api/client";
-import { usePolling } from "../hooks/usePolling";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -133,26 +133,29 @@ function ProgressBar({ percent, label }) {
 
 export default function HealthCheckPage() {
   const toast = useToast();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState(null);
 
-  const runCheck = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await api.getHealthCheck();
-      setData(result);
-      setLastUpdate(new Date());
-    } catch (e) {
-      toast.error(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
+  const {
+    data,
+    isFetching: loading,
+    refetch,
+    error,
+    dataUpdatedAt,
+  } = useQuery({
+    queryKey: ["health"],
+    queryFn: () => api.getHealthCheck(),
+    enabled: autoRefresh,
+    refetchInterval: autoRefresh ? 30_000 : false,
+    refetchIntervalInBackground: false,
+  });
 
-  // Refresh every 30s while the tab is visible and autoRefresh is enabled.
-  usePolling(runCheck, 30000, autoRefresh);
+  useEffect(() => {
+    if (error) toast.error(error.message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+
+  const lastUpdate = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  const runCheck = () => refetch();
 
   return (
     <div className="space-y-4">
