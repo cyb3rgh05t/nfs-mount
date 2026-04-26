@@ -962,8 +962,8 @@ export default function DashboardPage() {
                   key={i}
                   className="flex gap-2 py-0.5 hover:bg-white/[0.02]"
                 >
-                  <span className="text-nfs-muted/50 shrink-0 w-[52px]">
-                    {entry.timestamp ? entry.timestamp.split(" ")[1] || "" : ""}
+                  <span className="text-nfs-muted/50 shrink-0 w-[140px]">
+                    {entry.timestamp || ""}
                   </span>
                   <span
                     className={`shrink-0 w-[60px] text-center rounded px-0.5 ${
