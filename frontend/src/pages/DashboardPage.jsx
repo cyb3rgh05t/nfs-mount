@@ -434,14 +434,27 @@ export default function DashboardPage() {
                     </div>
                     {/* Mini detail chips */}
                     {(() => {
-                      const sources = Array.isArray(c.sources)
-                        ? c.sources
-                        : typeof c.sources === "string"
-                          ? c.sources
-                              .split(":")
-                              .map((s) => s.trim())
-                              .filter(Boolean)
-                          : [];
+                      const parseSources = (raw) => {
+                        if (Array.isArray(raw)) return raw;
+                        if (typeof raw !== "string") return [];
+                        const trimmed = raw.trim();
+                        if (!trimmed) return [];
+                        // Try JSON first (DB stores list as JSON string)
+                        if (trimmed.startsWith("[")) {
+                          try {
+                            const parsed = JSON.parse(trimmed);
+                            if (Array.isArray(parsed)) return parsed;
+                          } catch {
+                            /* fall through */
+                          }
+                        }
+                        // mergerfs branch syntax uses ':' as separator
+                        return trimmed
+                          .split(":")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                      };
+                      const sources = parseSources(c.sources);
                       return sources.length > 0 ? (
                         <div className="bg-nfs-card/80 border border-nfs-border/40 rounded px-2 py-1.5 mb-2">
                           <p className="text-[9px] text-nfs-muted uppercase tracking-wider mb-1">
@@ -451,7 +464,8 @@ export default function DashboardPage() {
                             {sources.map((src, i) => (
                               <span
                                 key={i}
-                                className="inline-flex items-center text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 font-mono text-blue-300 truncate max-w-[120px]"
+                                title={src}
+                                className="inline-flex items-center text-[9px] bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 font-mono text-blue-300 truncate max-w-full"
                               >
                                 {src}
                               </span>
