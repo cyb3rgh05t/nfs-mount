@@ -17,6 +17,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useCachedState } from "../hooks/useCache";
+import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import ProgressDialog from "../components/ProgressDialog";
 
@@ -94,71 +95,44 @@ export default function DashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [
-        st,
-        sys,
-        nfsStatusRaw,
-        nfsMounts,
-        mergerStatusRaw,
-        mergerConfigs,
-        exportStatusRaw,
-        nfsExportConfigs,
-        vpn,
-        kp,
-        rps,
-        fw,
-        logData,
-      ] = await Promise.all([
-        api.getSystemStatus(),
-        api.getSystemStats(),
-        api.getNFSStatus().catch(() => []),
-        api.getNFSMounts().catch(() => []),
-        api.getMergerFSStatus().catch(() => []),
-        api.getMergerFSConfigs().catch(() => []),
-        api.getNFSExportsStatus().catch(() => []),
-        api.getNFSExports().catch(() => []),
-        api.getAllVPNStatus().catch(() => []),
-        api.getKernelParams().catch(() => []),
-        api.getRpsXps().catch(() => null),
-        api.getFirewallStatus().catch(() => null),
-        api.getLogs(20).catch(() => []),
-      ]);
+      // One bundled request instead of 13 individual polls.
+      const data = await api.getDashboardSummary();
 
       // Merge status endpoints with config endpoints so dashboard cards always
       // have full metadata (server/path/sources), even if status payload is minimal.
       const nfsStatusById = new Map(
-        nfsStatusRaw.map((item) => [item.id, item]),
+        (data.nfs_status || []).map((item) => [item.id, item]),
       );
       const mergerStatusById = new Map(
-        mergerStatusRaw.map((item) => [item.id, item]),
+        (data.mergerfs_status || []).map((item) => [item.id, item]),
       );
       const exportStatusById = new Map(
-        exportStatusRaw.map((item) => [item.id, item]),
+        (data.nfs_exports_status || []).map((item) => [item.id, item]),
       );
 
-      const nfsMerged = nfsMounts.map((mount) => ({
+      const nfsMerged = (data.nfs_mounts || []).map((mount) => ({
         ...mount,
         ...(nfsStatusById.get(mount.id) || {}),
       }));
-      const mergerMerged = mergerConfigs.map((cfg) => ({
+      const mergerMerged = (data.mergerfs_configs || []).map((cfg) => ({
         ...cfg,
         ...(mergerStatusById.get(cfg.id) || {}),
       }));
-      const exportsMerged = nfsExportConfigs.map((exp) => ({
+      const exportsMerged = (data.nfs_exports || []).map((exp) => ({
         ...exp,
         ...(exportStatusById.get(exp.id) || {}),
       }));
 
-      setStatus(st);
-      setStats(sys);
+      setStatus(data.status);
+      setStats(data.stats);
       setNfsStatus(nfsMerged);
       setMergerStatus(mergerMerged);
       setNfsExports(exportsMerged);
-      setVpnStatus(vpn);
-      setKernelParams(kp);
-      setRpsXps(rps);
-      setFirewallStatus(fw);
-      setRecentLogs(logData);
+      setVpnStatus(data.vpn_status || []);
+      setKernelParams(data.kernel_params || []);
+      setRpsXps(data.rps_xps);
+      setFirewallStatus(data.firewall_status);
+      setRecentLogs(data.logs || []);
       setError("");
     } catch (e) {
       setError(e.message);
@@ -167,9 +141,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
   }, []);
+  // Poll every 30s while the tab is visible.
+  usePolling(fetchData, 30000);
 
   const hasNfsCards = nfsStatus.length > 0;
   const hasMergerCards = mergerStatus.length > 0;

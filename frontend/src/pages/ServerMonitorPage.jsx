@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Monitor,
   Plus,
@@ -26,6 +26,7 @@ import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
+import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import CustomSelect from "../components/CustomSelect";
@@ -125,7 +126,6 @@ export default function ServerMonitorPage() {
   const [form, setForm] = useState({});
   const [testing, setTesting] = useState(null);
   const [activeServer, setActiveServer] = useState(null);
-  const intervalRef = useRef(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -169,10 +169,9 @@ export default function ServerMonitorPage() {
   useEffect(() => {
     setLoading(true);
     fetchAll().finally(() => setLoading(false));
-    // Auto-refresh metrics every 30 seconds
-    intervalRef.current = setInterval(fetchMetrics, 30000);
-    return () => clearInterval(intervalRef.current);
   }, []);
+  // Refresh metrics every 60s while the tab is visible.
+  usePolling(fetchMetrics, 60000);
 
   const openCreate = () => {
     setForm({

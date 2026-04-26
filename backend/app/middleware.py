@@ -2,8 +2,12 @@
 Request / response logging middleware.
 
 Logs API requests with method, path, status, duration, and user info.
-All successful (2xx/3xx) requests are logged at DEBUG to reduce noise.
-Errors (4xx) at WARNING, server errors (5xx) at ERROR.
+Successful (2xx/3xx) requests log at DEBUG.
+Expected client noise (401/403/404/405) also logs at DEBUG – it is produced
+by background polling of expired sessions and by random internet bot scans,
+so it would otherwise drown out real signal at every visible level.
+Other 4xx (400, 409, 422, ...) at WARNING – those usually indicate real bugs.
+Server errors (5xx) at ERROR.
 """
 
 import logging
@@ -32,6 +36,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         if status >= 500:
             logger.error(msg)
+        elif status in (401, 403, 404, 405):
+            # Expected polling / bot-scan noise – DEBUG only.
+            logger.debug(msg)
         elif status >= 400:
             logger.warning(msg)
         else:

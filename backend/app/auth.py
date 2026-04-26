@@ -95,12 +95,15 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token")
         user_id = int(sub)
     except (JWTError, ValueError):
-        logger.warning("Invalid JWT token presented")
+        # Expired / malformed tokens are extremely common (background polling
+        # after logout, browser tabs left open, bot scans). DEBUG only – the
+        # 401 response itself is enough signal for the client.
+        logger.debug("Invalid JWT token presented")
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user = await db.get(User, user_id)
     if not user or not user.is_active:
-        logger.warning("JWT token for missing/disabled user id=%d", user_id)
+        logger.debug("JWT token for missing/disabled user id=%d", user_id)
         raise HTTPException(status_code=401, detail="User not found or disabled")
     logger.debug("Authenticated via JWT: %s (id=%d)", user.username, user.id)
     return user

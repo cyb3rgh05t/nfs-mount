@@ -21,6 +21,18 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Listen for 401s from anywhere in the app (background polling, etc.) and
+  // log the user out so polling loops stop and the login screen is shown.
+  useEffect(() => {
+    const handler = () => {
+      setToken("");
+      setUser(null);
+      localStorage.removeItem("token");
+    };
+    window.addEventListener("auth:unauthorized", handler);
+    return () => window.removeEventListener("auth:unauthorized", handler);
+  }, []);
+
   const login = async (username, password) => {
     const data = await api.login(username, password);
     localStorage.setItem("token", data.access_token);

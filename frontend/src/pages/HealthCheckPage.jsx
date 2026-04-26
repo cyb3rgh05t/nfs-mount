@@ -20,6 +20,7 @@ import {
 import { useToast } from "../components/ToastProvider";
 import Toggle from "../components/Toggle";
 import api from "../api/client";
+import { usePolling } from "../hooks/usePolling";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -150,13 +151,8 @@ export default function HealthCheckPage() {
     }
   }, [toast]);
 
-  // Auto-refresh every 10s
-  useEffect(() => {
-    if (!autoRefresh) return;
-    runCheck();
-    const id = setInterval(runCheck, 10000);
-    return () => clearInterval(id);
-  }, [autoRefresh, runCheck]);
+  // Refresh every 30s while the tab is visible and autoRefresh is enabled.
+  usePolling(runCheck, 30000, autoRefresh);
 
   return (
     <div className="space-y-4">

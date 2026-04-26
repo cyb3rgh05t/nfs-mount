@@ -35,8 +35,12 @@ async function request(method, path, body) {
   const res = await fetch(`${API_BASE}${path}`, opts);
   const duration = Math.round(performance.now() - start);
   if (res.status === 401 && !path.startsWith("/auth/")) {
-    log("warn", `${method} ${path} -> 401 (${duration}ms) – token cleared`);
+    log("warn", `${method} ${path} -> 401 (${duration}ms) – session expired`);
+    // Clear credentials and notify the app so polling loops can stop and the
+    // user is redirected to /login instead of hammering the API every minute.
     localStorage.removeItem("token");
+    localStorage.removeItem("apiKey");
+    window.dispatchEvent(new CustomEvent("auth:unauthorized"));
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -126,6 +130,7 @@ const api = {
   getHealth: () => request("GET", "/system/health"),
   getSystemStatus: () => request("GET", "/system/status"),
   getSystemStats: () => request("GET", "/system/stats"),
+  getDashboardSummary: () => request("GET", "/system/dashboard-summary"),
   getVPNStatus: () => request("GET", "/system/vpn"),
   getKernelParams: () => request("GET", "/system/kernel-params"),
   applyKernelTuning: (params) =>

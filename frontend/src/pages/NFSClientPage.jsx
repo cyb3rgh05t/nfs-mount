@@ -17,6 +17,7 @@ import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
 import { useConfirm } from "../components/ConfirmProvider";
 import { useCachedState } from "../hooks/useCache";
+import { usePolling } from "../hooks/usePolling";
 import InfoBox from "../components/InfoBox";
 import Toggle from "../components/Toggle";
 import ProgressDialog from "../components/ProgressDialog";
@@ -116,11 +117,8 @@ export default function NFSClientPage() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  // Poll every 30s; pauses automatically when the tab is hidden.
+  usePolling(fetchData, 30000);
 
   const openCreate = () => {
     setEditing(null);

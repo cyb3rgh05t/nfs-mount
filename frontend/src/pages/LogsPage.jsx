@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import api from "../api/client";
 import { useToast } from "../components/ToastProvider";
+import { usePolling } from "../hooks/usePolling";
 import ProgressDialog from "../components/ProgressDialog";
 import CustomSelect from "../components/CustomSelect";
 
@@ -49,12 +50,14 @@ export default function LogsPage() {
     }
   };
 
+  // Refresh logs every 10s while the tab is visible. Disabled when the user
+  // toggles autoRefresh off. Filter / line-count changes also trigger a refetch.
+  usePolling(fetchLogs, 10000, autoRefresh);
   useEffect(() => {
-    fetchLogs();
-    if (!autoRefresh) return;
-    const interval = setInterval(fetchLogs, 5000);
-    return () => clearInterval(interval);
-  }, [level, lines, autoRefresh]);
+    if (!autoRefresh) fetchLogs();
+    // run once on filter change even when autoRefresh is off
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, lines]);
 
   useEffect(() => {
     if (autoScroll && logEndRef.current) {
