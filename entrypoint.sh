@@ -40,8 +40,15 @@ fi
 head "Kernel Tuning"
 log "Applying kernel parameters for high-throughput NFS streaming..."
 
-# NFS/SUNRPC: increase concurrent RPC slots (default 65 -> 128)
+# NFS/SUNRPC: increase concurrent RPC slots (default 2 -> 128)
+# IMPORTANT: tcp_max_slot_table_entries is the upper bound; tcp_slot_table_entries
+# is the *actually used* value. Setting only the max leaves the active value
+# at the kernel default (2), which silently caps NFS parallelism. Both must be
+# set, and the sunrpc module must already be loaded (it is once any NFS mount
+# exists or rpcbind starts).
+modprobe sunrpc 2>/dev/null || true
 sysctl -qw sunrpc.tcp_max_slot_table_entries=128 2>/dev/null || true
+sysctl -qw sunrpc.tcp_slot_table_entries=128 2>/dev/null || true
 sysctl -qw sunrpc.udp_slot_table_entries=128 2>/dev/null || true
 
 # Network buffers: 128MB for high-throughput 10G links
