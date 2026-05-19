@@ -65,6 +65,10 @@ async def get_current_user(
                 # producing "database is locked" stalls under load.
                 now = datetime.now(timezone.utc)
                 last = db_key.last_used_at
+                # SQLite stores naive datetimes — normalise to UTC-aware
+                # before comparing, otherwise Python raises TypeError.
+                if last is not None and last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
                 if last is None or (now - last).total_seconds() > 60:
                     db_key.last_used_at = now
                     await db.commit()
