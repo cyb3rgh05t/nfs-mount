@@ -56,9 +56,18 @@ async def get_current_user(
         if db_key:
             user = await db.get(User, db_key.user_id)
             if user and user.is_active:
-                # Update last_used_at
-                db_key.last_used_at = datetime.now(timezone.utc)
-                await db.commit()
+                # Throttle last_used_at updates to at most once per 60s.
+                # External monitoring tools (Komandorr, Uptime Kuma, etc.)
+                # can hammer authenticated endpoints multiple times per
+                # minute. Without throttling every request triggers a write
+                # commit on the SQLite "api_keys" row, serialising all other
+                # writers (server-monitor, health-check, notifications) and
+                # producing "database is locked" stalls under load.
+                now = datetime.now(timezone.utc)
+                last = db_key.last_used_at
+                if last is None or (now - last).total_seconds() > 60:
+                    db_key.last_used_at = now
+                    await db.commit()
                 logger.debug(
                     "Authenticated via DB API key '%s' as user: %s",
                     db_key.name,
