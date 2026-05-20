@@ -650,6 +650,99 @@ async def load_saved_kernel_params(db: AsyncSession) -> list[dict]:
     return [{"name": s.key, "value": s.value} for s in result.scalars().all()]
 
 
+# Recommended NFS-tuned kernel defaults. Applied at container startup for any
+# parameter the user has NOT explicitly customised through the UI (saved to
+# the system_settings table under category="kernel"). Once applied, each
+# parameter is persisted to the DB so it appears in the Kernel Tuning page
+# and survives subsequent restarts. User customisations always win.
+RECOMMENDED_KERNEL_DEFAULTS: list[tuple[str, str]] = [
+    ("fs.file-max", "2097152"),
+    ("fs.nr_open", "2097152"),
+    ("net.core.default_qdisc", "fq"),
+    ("net.core.netdev_max_backlog", "65535"),
+    ("net.core.rmem_default", "262144"),
+    ("net.core.rmem_max", "134217728"),
+    ("net.core.somaxconn", "65535"),
+    ("net.core.wmem_default", "262144"),
+    ("net.core.wmem_max", "134217728"),
+    ("net.ipv4.ip_local_port_range", "1024 65000"),
+    ("net.ipv4.neigh.default.gc_thresh1", "1024"),
+    ("net.ipv4.neigh.default.gc_thresh2", "4096"),
+    ("net.ipv4.neigh.default.gc_thresh3", "8192"),
+    ("net.ipv4.tcp_congestion_control", "bbr"),
+    ("net.ipv4.tcp_fin_timeout", "15"),
+    ("net.ipv4.tcp_keepalive_time", "300"),
+    ("net.ipv4.tcp_mtu_probing", "1"),
+    ("net.ipv4.tcp_rmem", "4096 87380 134217728"),
+    ("net.ipv4.tcp_slow_start_after_idle", "0"),
+    ("net.ipv4.tcp_timestamps", "1"),
+    ("net.ipv4.tcp_window_scaling", "1"),
+    ("net.ipv4.tcp_wmem", "4096 65536 134217728"),
+    ("net.ipv4.udp_rmem_min", "16384"),
+    ("net.ipv4.udp_wmem_min", "16384"),
+    ("net.ipv6.neigh.default.gc_thresh1", "1024"),
+    ("net.ipv6.neigh.default.gc_thresh2", "4096"),
+    ("net.ipv6.neigh.default.gc_thresh3", "8192"),
+    ("sunrpc.tcp_max_slot_table_entries", "128"),
+    ("sunrpc.tcp_slot_table_entries", "128"),
+    ("sunrpc.udp_slot_table_entries", "128"),
+    ("vm.dirty_background_ratio", "5"),
+    ("vm.dirty_ratio", "15"),
+    ("vm.max_map_count", "262144"),
+    ("vm.swappiness", "10"),
+    ("vm.vfs_cache_pressure", "50"),
+]
+
+
+async def apply_recommended_kernel_defaults(db: AsyncSession) -> dict:
+    """Apply recommended NFS-tuned kernel defaults for parameters the user
+    has not customised yet. Persists applied values so they show up in the
+    Kernel Tuning UI and survive restarts.
+    """
+    saved = await load_saved_kernel_params(db)
+    saved_keys = {s["name"] for s in saved}
+
+    missing = [
+        {"name": n, "value": v}
+        for n, v in RECOMMENDED_KERNEL_DEFAULTS
+        if n not in saved_keys
+    ]
+    if not missing:
+        return {
+            "applied": 0,
+            "skipped": len(RECOMMENDED_KERNEL_DEFAULTS),
+            "failed": 0,
+        }
+
+    logger.info(
+        "Applying %d recommended kernel defaults (user customisations preserved)",
+        len(missing),
+    )
+    results = await apply_kernel_tuning(missing, db=db)
+    ok = sum(1 for r in results if r["success"])
+    fail = sum(1 for r in results if not r["success"])
+    if fail:
+        # Some params may need a privileged container (cap_sys_admin) or a
+        # kernel module (e.g. tcp_bbr, sunrpc). Surface the count but don't
+        # fail startup — they appear as N/A in the UI for the user to fix.
+        logger.info(
+            "Recommended kernel defaults: %d applied, %d failed "
+            "(check container privileges / kernel modules)",
+            ok,
+            fail,
+        )
+        for r in results:
+            if not r["success"]:
+                logger.debug("  default %s failed: %s", r["name"], r.get("error", "?"))
+    else:
+        logger.info("Recommended kernel defaults: all %d applied", ok)
+    return {
+        "applied": ok,
+        "skipped": len(saved_keys),
+        "failed": fail,
+    }
+
+
 async def load_saved_rpsxps(db: AsyncSession) -> dict:
     """Load RPS/XPS settings saved in DB."""
     result = await db.execute(
@@ -784,6 +877,10 @@ async def auto_apply_saved_settings(db: AsyncSession):
         ok = sum(1 for r in results if r["success"])
         fail = sum(1 for r in results if not r["success"])
         logger.info("Kernel params: %d applied, %d failed", ok, fail)
+
+    # Fill in any recommended NFS defaults the user hasn't customised yet.
+    # On a fresh install this seeds the full optimal tuning profile.
+    await apply_recommended_kernel_defaults(db)
 
     # RPS/XPS
     rpsxps = await load_saved_rpsxps(db)
