@@ -21,7 +21,7 @@
 
 1. **Provider order in [`main.jsx`](../frontend/src/main.jsx)** is fixed:
    `BrowserRouter → QueryClientProvider → AuthProvider → ToastProvider
-   → ConfirmProvider → App`. Don't reorder.
+→ ConfirmProvider → App`. Don't reorder.
 2. **One transport** —
    [`api/client.js`](../frontend/src/api/client.js). Never `fetch` directly
    from components: that skips auth, 401 handling and logging.
