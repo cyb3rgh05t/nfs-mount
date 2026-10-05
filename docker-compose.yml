@@ -7,17 +7,21 @@ services:
       - "PUID=1000"
       - "PGID=1000"
       - "TZ=Europe/Berlin"
-      - "JWT_SECRET=change-me-to-a-secure-random-string"
-      - "DEFAULT_ADMIN_USER=admin"
-      - "DEFAULT_ADMIN_PASS=admin"
-      - "API_KEY="
-      - "CORS_ORIGINS=https://nfs.deinedomain.com"
-      - "DISCORD_WEBHOOK="
-      - "TELEGRAM_BOT_TOKEN="
-      - "TELEGRAM_CHAT_ID="
-      - "TELEGRAM_TOPIC_ID="
-      - "SERVER_NAME="
-      - "NFS_THREADS=512"
+      - "JWT_SECRET=${JWT_SECRET:-change-me-to-a-secure-random-string}"
+      - "DEFAULT_ADMIN_USER=${DEFAULT_ADMIN_USER:-admin}"
+      - "DEFAULT_ADMIN_PASS=${DEFAULT_ADMIN_PASS:-admin}"
+      - "API_KEY=${API_KEY:-}"
+      - "CORS_ORIGINS=${CORS_ORIGINS:-https://nfs.deinedomain.com}"
+      # Notifications:
+      - "DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}"
+      - "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}"
+      - "TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}"
+      - "TELEGRAM_TOPIC_ID=${TELEGRAM_TOPIC_ID:-}"
+      - "SERVER_NAME=${SERVER_NAME:-}"
+      # Rollen- und Netzwerk-Steuerung:
+      - "ENABLE_NFS_SERVER=${ENABLE_NFS_SERVER:-false}"
+      - "NETWORK_SPEED=${NETWORK_SPEED:-10G}"
+      - "NFS_THREADS=${NFS_THREADS:-512}"
     restart: "unless-stopped"
     network_mode: "host"
     pid: "host"
@@ -28,6 +32,7 @@ services:
     devices:
       - "/dev/fuse:/dev/fuse"
     volumes:
+      - "./entrypoint.sh:/entrypoint.sh:ro"
       - "/opt/appdata/nfs-mount/data:/data"
       - "/opt/appdata/nfs-mount/ssh:/config/ssh"
       - "/mnt:/mnt:rshared"
@@ -35,3 +40,18 @@ services:
       - "/etc/hostname:/etc/hostname_host:ro"
       # Required for NFS server export management:
       - "/etc/exports:/etc/exports"
+    logging:
+      driver: json-file
+      options:
+        max-file: "3"
+        max-size: 10m
+    working_dir: /app
+    security_opt:
+      - label=disable
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -f http://localhost:8080/api/system/health || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 3

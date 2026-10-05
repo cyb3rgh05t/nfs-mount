@@ -36,53 +36,65 @@ else
     fi
 fi
 
-# ── Kernel Tuning for 300+ Concurrent Streams ──
+# ── Kernel Tuning (Dynamisch für 10G vs 1G) ──
 head "Kernel Tuning"
-log "Applying kernel parameters for high-throughput NFS streaming..."
+SPEED="${NETWORK_SPEED:-10G}"
 
-# NFS/SUNRPC: increase concurrent RPC slots (default 2 -> 128)
-# IMPORTANT: tcp_max_slot_table_entries is the upper bound; tcp_slot_table_entries
-# is the *actually used* value. Setting only the max leaves the active value
-# at the kernel default (2), which silently caps NFS parallelism. Both must be
-# set, and the sunrpc module must already be loaded (it is once any NFS mount
-# exists or rpcbind starts).
+if [ "$SPEED" = "1G" ]; then
+    log "Applying kernel parameters for ${CYAN}1 Gbps${RST} network..."
+    TCP_MAX=33554432
+    NET_BUDGET=300
+    NET_BUDGET_USECS=4000
+    SOMAX=16384
+    OPTMEM=65536
+else
+    log "Applying kernel parameters for ${CYAN}10 Gbps${RST} high-throughput streaming..."
+    TCP_MAX=134217728
+    NET_BUDGET=600
+    NET_BUDGET_USECS=8000
+    SOMAX=65535
+    OPTMEM=262144
+fi
+
+# NFS/SUNRPC Slots (Verhindert RPC-Queue Drops)
 modprobe sunrpc 2>/dev/null || true
 sysctl -qw sunrpc.tcp_max_slot_table_entries=128 2>/dev/null || true
 sysctl -qw sunrpc.tcp_slot_table_entries=128 2>/dev/null || true
 sysctl -qw sunrpc.udp_slot_table_entries=128 2>/dev/null || true
 
-# Network buffers: 128MB for high-throughput 10G links
-sysctl -qw net.core.rmem_max=134217728 2>/dev/null || true
-sysctl -qw net.core.wmem_max=134217728 2>/dev/null || true
-sysctl -qw net.core.rmem_default=1048576 2>/dev/null || true
-sysctl -qw net.core.wmem_default=1048576 2>/dev/null || true
-sysctl -qw net.ipv4.tcp_rmem="4096 1048576 134217728" 2>/dev/null || true
-sysctl -qw net.ipv4.tcp_wmem="4096 1048576 134217728" 2>/dev/null || true
+# Network buffers
+sysctl -qw net.core.rmem_max=$TCP_MAX 2>/dev/null || true
+sysctl -qw net.core.wmem_max=$TCP_MAX 2>/dev/null || true
+sysctl -qw net.core.rmem_default=262144 2>/dev/null || true
+sysctl -qw net.core.wmem_default=262144 2>/dev/null || true
+sysctl -qw net.ipv4.tcp_rmem="4096 87380 $TCP_MAX" 2>/dev/null || true
+sysctl -qw net.ipv4.tcp_wmem="4096 65536 $TCP_MAX" 2>/dev/null || true
 
-# TCP optimizations
+# Queues & Budget
+sysctl -qw net.core.somaxconn=$SOMAX 2>/dev/null || true
+sysctl -qw net.core.netdev_max_backlog=$SOMAX 2>/dev/null || true
+sysctl -qw net.core.netdev_budget=$NET_BUDGET 2>/dev/null || true
+sysctl -qw net.core.netdev_budget_usecs=$NET_BUDGET_USECS 2>/dev/null || true
+sysctl -qw net.core.optmem_max=$OPTMEM 2>/dev/null || true
+
+# TCP Optimierungen & BBR
+sysctl -qw net.core.default_qdisc=fq 2>/dev/null || true
+sysctl -qw net.ipv4.tcp_congestion_control=bbr 2>/dev/null || true
 sysctl -qw net.ipv4.tcp_window_scaling=1 2>/dev/null || true
 sysctl -qw net.ipv4.tcp_timestamps=1 2>/dev/null || true
 sysctl -qw net.ipv4.tcp_sack=1 2>/dev/null || true
 sysctl -qw net.ipv4.tcp_no_metrics_save=1 2>/dev/null || true
-sysctl -qw net.ipv4.tcp_moderate_rcvbuf=1 2>/dev/null || true
+sysctl -qw net.ipv4.tcp_slow_start_after_idle=0 2>/dev/null || true
 
-# BBR congestion control (reduces packet loss on high-throughput links)
-sysctl -qw net.core.default_qdisc=fq 2>/dev/null || true
-sysctl -qw net.ipv4.tcp_congestion_control=bbr 2>/dev/null || true
-
-# VM/Page cache tuning for streaming workloads
-sysctl -qw vm.dirty_ratio=40 2>/dev/null || true
-sysctl -qw vm.dirty_background_ratio=10 2>/dev/null || true
+# Dirty Page Tuning (5/15 gegen I/O Stalls)
+sysctl -qw vm.dirty_background_ratio=5 2>/dev/null || true
+sysctl -qw vm.dirty_ratio=15 2>/dev/null || true
 sysctl -qw vm.vfs_cache_pressure=50 2>/dev/null || true
+sysctl -qw vm.swappiness=10 2>/dev/null || true
 
-# Connection tracking for many concurrent NFS clients
+# Connection tracking
 sysctl -qw net.netfilter.nf_conntrack_max=524288 2>/dev/null || true
 sysctl -qw net.netfilter.nf_conntrack_tcp_timeout_established=86400 2>/dev/null || true
-
-# Network device budget for high-throughput
-sysctl -qw net.core.netdev_budget=600 2>/dev/null || true
-sysctl -qw net.core.netdev_budget_usecs=8000 2>/dev/null || true
-sysctl -qw net.core.optmem_max=262144 2>/dev/null || true
 
 log "Kernel parameters applied ${GREEN}✓${RST}"
 
@@ -91,7 +103,6 @@ head "CPU Load Balancing"
 ETH_DEV=$(ip -o link show | awk -F': ' '!/lo|docker|br-|veth|wg/{print $2; exit}')
 if [ -n "$ETH_DEV" ]; then
     log "Optimizing RPS/XPS for ${CYAN}$ETH_DEV${RST}..."
-    # Detect CPU count and build bitmask
     NCPU=$(nproc 2>/dev/null || echo 1)
     if [ "$NCPU" -ge 64 ]; then
         MASK="ffffffff,ffffffff"
@@ -123,81 +134,56 @@ else
     log "No WireGuard config at /config/wg0.conf — skipping"
 fi
 
-# ── Pin NFS auxiliary services to fixed ports (for firewall) ──
-head "NFS Server"
-log "Pinning NFS services to fixed ports..."
-MOUNTD_PORT=32767
-NLOCKMGR_PORT=32768
-STATD_PORT=32769
+# ── NFS Server Subsystem (NUR aktivieren wenn ENABLE_NFS_SERVER=true) ──
+if [ "${ENABLE_NFS_SERVER:-false}" = "true" ]; then
+    head "NFS Server"
+    log "Pinning NFS services to fixed ports..."
+    MOUNTD_PORT=32767
+    NLOCKMGR_PORT=32768
+    STATD_PORT=32769
 
-# Configure statd fixed port
-mkdir -p /var/lib/nfs/sm /var/lib/nfs/sm.bak /var/run/rpc_pipefs 2>/dev/null || true
-
-# Set port in /etc/default/nfs-common (statd)
-cat > /etc/default/nfs-common 2>/dev/null <<EOF
+    mkdir -p /var/lib/nfs/sm /var/lib/nfs/sm.bak /var/run/rpc_pipefs 2>/dev/null || true
+    cat > /etc/default/nfs-common 2>/dev/null <<EOF
 STATDOPTS="--port $STATD_PORT"
 EOF
+    echo "options lockd nlm_udpport=$NLOCKMGR_PORT nlm_tcpport=$NLOCKMGR_PORT" > /etc/modprobe.d/lockd.conf 2>/dev/null || true
+    sysctl -qw fs.nfs.nlm_tcpport=$NLOCKMGR_PORT 2>/dev/null || true
+    sysctl -qw fs.nfs.nlm_udpport=$NLOCKMGR_PORT 2>/dev/null || true
 
-# Configure nlockmgr via kernel module params
-echo "options lockd nlm_udpport=$NLOCKMGR_PORT nlm_tcpport=$NLOCKMGR_PORT" > /etc/modprobe.d/lockd.conf 2>/dev/null || true
-# Also set via sysctl for runtime
-sysctl -qw fs.nfs.nlm_tcpport=$NLOCKMGR_PORT 2>/dev/null || true
-sysctl -qw fs.nfs.nlm_udpport=$NLOCKMGR_PORT 2>/dev/null || true
-
-# Configure mountd fixed port and NFS threads in /etc/default/nfs-kernel-server
-NFS_THREADS=${NFS_THREADS:-512}
-cat > /etc/default/nfs-kernel-server 2>/dev/null <<EOF
+    NFS_THREADS=${NFS_THREADS:-512}
+    cat > /etc/default/nfs-kernel-server 2>/dev/null <<EOF
 RPCMOUNTDOPTS="--port $MOUNTD_PORT"
 RPCNFSDCOUNT=$NFS_THREADS
 EOF
 
-log "Fixed ports: mountd=${CYAN}$MOUNTD_PORT${RST}  nlockmgr=${CYAN}$NLOCKMGR_PORT${RST}  statd=${CYAN}$STATD_PORT${RST}"
-log "NFS server threads: ${CYAN}$NFS_THREADS${RST}"
+    if [ ! -d /proc/fs/nfsd ] || ! mountpoint -q /proc/fs/nfsd 2>/dev/null; then
+        modprobe nfsd 2>/dev/null || true
+        mkdir -p /proc/fs/nfsd 2>/dev/null || true
+        mount -t nfsd nfsd /proc/fs/nfsd 2>/dev/null || true
+    fi
 
-# ── Mount nfsd filesystem (required for NFS server in containers) ──
-if [ ! -d /proc/fs/nfsd ] || ! mountpoint -q /proc/fs/nfsd 2>/dev/null; then
-    log "Mounting /proc/fs/nfsd..."
-    modprobe nfsd 2>/dev/null || true
-    mkdir -p /proc/fs/nfsd 2>/dev/null || true
-    mount -t nfsd nfsd /proc/fs/nfsd 2>/dev/null || true
-fi
-if mountpoint -q /proc/fs/nfsd 2>/dev/null; then
-    log "/proc/fs/nfsd mounted ${GREEN}✓${RST}"
+    if [ ! -d /var/lib/nfs/rpc_pipefs ] || ! mountpoint -q /var/lib/nfs/rpc_pipefs 2>/dev/null; then
+        mkdir -p /var/lib/nfs/rpc_pipefs 2>/dev/null || true
+        mount -t rpc_pipefs rpc_pipefs /var/lib/nfs/rpc_pipefs 2>/dev/null || true
+    fi
+    log "NFS Server Mode aktiv mit ${CYAN}$NFS_THREADS${RST} Threads ${GREEN}✓${RST}"
 else
-    warn "Could not mount /proc/fs/nfsd — NFS server exports will not work"
-fi
-
-# Mount rpc_pipefs if needed
-if [ ! -d /var/lib/nfs/rpc_pipefs ] || ! mountpoint -q /var/lib/nfs/rpc_pipefs 2>/dev/null; then
-    mkdir -p /var/lib/nfs/rpc_pipefs 2>/dev/null || true
-    mount -t rpc_pipefs rpc_pipefs /var/lib/nfs/rpc_pipefs 2>/dev/null || true
-fi
-
-# ── Detect host /etc/exports access ──
-HOST_EXPORTS="/proc/1/root/etc/exports"
-if grep -q ' /etc/exports ' /proc/mounts 2>/dev/null; then
-    log "Host /etc/exports ${GREEN}bind-mounted${RST} into container ${GREEN}✓${RST}"
-elif [ -f "$HOST_EXPORTS" ]; then
-    log "Host /etc/exports accessible via ${CYAN}$HOST_EXPORTS${RST} ${GREEN}✓${RST}"
-    warn "Bind-mount recommended: add ${CYAN}- /etc/exports:/etc/exports${RST} to docker-compose volumes"
-else
-    warn "Host /etc/exports NOT accessible — NFS export management will not work"
-    warn "Add ${CYAN}- /etc/exports:/etc/exports${RST} to docker-compose volumes"
+    head "NFS Mode"
+    log "Running in ${GREEN}NFS Client Mode${RST} (Kein nfsd Daemon erforderlich) ${GREEN}✓${RST}"
 fi
 
 # ── Clean stale mounts & ensure directories ──
-for mp in /mnt/downloads /mnt/unionfs; do
+for mp in /mnt/storage /mnt/storage2 /mnt/unionfs; do
     if mountpoint -q "$mp" 2>/dev/null; then
-        log "Unmounting stale mount at ${CYAN}$mp${RST}..."
-        fusermount -u "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null || true
+        log "Active mountpoint found at ${CYAN}$mp${RST} ${GREEN}✓${RST}"
     elif [ -e "$mp" ] && ! stat "$mp" >/dev/null 2>&1; then
         log "Stale transport at ${CYAN}$mp${RST}, force unmounting..."
-        umount -l "$mp" 2>/dev/null || true
+        umount -l "$mp" 2>/dev/null || fusermount -u -z "$mp" 2>/dev/null || true
     fi
     mkdir -p "$mp" 2>/dev/null || true
 done
 
 # ── Start Application ──
 head "Application"
-log "Starting NFS-MergerFS Manager on port ${CYAN}8080${RST}..."
+log "Starting NFS-MergerFS Manager API on port ${CYAN}8080${RST}..."
 exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --workers 1 --log-level warning
